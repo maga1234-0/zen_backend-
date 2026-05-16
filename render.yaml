@@ -1,0 +1,24 @@
+# Render Blueprint for Hotel PMS Backend
+# Documentation: https://render.com/docs/blueprint-spec
+
+services:
+  - type: web
+    name: hotel-pms-backend
+    env: node
+    region: oregon  # or frankfurt, singapore, etc.
+    plan: free
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000  # Render provides PORT environment variable
+      - key: DATABASE_URL
+        sync: false  # Set this in Render dashboard
+      - key: JWT_SECRET
+        sync: false  # Set this in Render dashboard
+      - key: CORS_ORIGIN
+        value: https://zen-lyart.vercel.app  # Your frontend URL
+      - key: VERCEL
+        value: "0"  # Disable Vercel serverless mode
