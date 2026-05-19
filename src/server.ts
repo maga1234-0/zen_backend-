@@ -16,7 +16,7 @@ try {
   // Create empty router as fallback
   const { Router } = require('express');
   routes = Router();
-  routes.get('/', (req, res) => {
+  routes.get('/', (req: express.Request, res: express.Response) => {
     res.json({ error: 'Routes failed to load', message: error.message });
   });
 }
