@@ -8,12 +8,15 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 10000; // Railway uses 10000
 
 console.log('🔧 Starting JavaScript server for Railway');
-console.log(`   PORT: ${PORT}`);
+console.log(`   PORT from env: ${process.env.PORT || 'not set'}`);
+console.log(`   Using PORT: ${PORT}`);
 console.log(`   NODE_ENV: ${process.env.NODE_ENV || 'development'}`);
 console.log(`   CORS_ORIGIN: ${process.env.CORS_ORIGIN || 'not set'}`);
+console.log(`   DATABASE_URL: ${process.env.DATABASE_URL ? 'set' : 'not set'}`);
+console.log(`   JWT_SECRET: ${process.env.JWT_SECRET ? 'set' : 'not set'}`);
 
 // Middleware
 app.use(helmet());
@@ -382,12 +385,19 @@ app.use((err, req, res, next) => {
   });
 });
 
-// Start server
-app.listen(PORT, () => {
-  console.log(`🚀 JavaScript server running on port ${PORT}`);
-  console.log(`🌐 Health check: http://localhost:${PORT}/health`);
-  console.log(`📝 API root: http://localhost:${PORT}/api`);
-  console.log(`🔐 Login: http://localhost:${PORT}/api/auth/login`);
-});
+// Start server with error handling
+try {
+  app.listen(PORT, () => {
+    console.log(`🚀 JavaScript server running on port ${PORT}`);
+    console.log(`🌐 Health check endpoint: /health`);
+    console.log(`📝 API root endpoint: /api`);
+    console.log(`🔐 Login endpoint: /api/auth/login`);
+    console.log(`👤 Staff endpoint: /api/users`);
+    console.log(`🏨 Rooms endpoint: /api/rooms`);
+  });
+} catch (error) {
+  console.error('❌ Failed to start server:', error);
+  process.exit(1);
+}
 
 module.exports = app;
