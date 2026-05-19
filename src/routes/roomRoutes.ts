@@ -141,6 +141,20 @@ router.delete('/:id', authorize('admin', 'manager'), async (req, res) => {
   try {
     const { id } = req.params;
 
+    // Check if room has any associated bookings
+    const bookingsCheck = await pool.query(
+      'SELECT COUNT(*) as booking_count FROM bookings WHERE room_id = $1',
+      [id]
+    );
+
+    const bookingCount = parseInt(bookingsCheck.rows[0].booking_count);
+    
+    if (bookingCount > 0) {
+      return res.status(400).json({ 
+        message: `Cannot delete room with ${bookingCount} associated booking(s). Please delete or update the bookings first.` 
+      });
+    }
+
     const result = await pool.query(
       'DELETE FROM rooms WHERE id = $1 RETURNING *',
       [id]
@@ -151,9 +165,17 @@ router.delete('/:id', authorize('admin', 'manager'), async (req, res) => {
     }
 
     res.json({ message: 'Room deleted successfully' });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Delete room error:', error);
-    res.status(500).json({ message: 'Server error' });
+    
+    // Check for foreign key constraint violation
+    if (error.code === '23503') { // PostgreSQL foreign key violation
+      return res.status(400).json({ 
+        message: 'Cannot delete room with associated bookings. Please delete or update the bookings first.' 
+      });
+    }
+    
+    res.status(500).json({ message: 'Server error', error: error.message });
   }
 });
 
