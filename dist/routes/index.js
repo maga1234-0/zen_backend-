@@ -1,0 +1,24 @@
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const authRoutes_1 = __importDefault(require("./authRoutes"));
+const dashboardRoutes_1 = __importDefault(require("./dashboardRoutes"));
+const roomRoutes_1 = __importDefault(require("./roomRoutes"));
+const bookingRoutes_1 = __importDefault(require("./bookingRoutes"));
+const guestRoutes_1 = __importDefault(require("./guestRoutes"));
+const userRoutes_1 = __importDefault(require("./userRoutes"));
+const paymentRoutes_1 = __importDefault(require("./paymentRoutes"));
+const notificationRoutes_1 = __importDefault(require("./notificationRoutes"));
+const router = (0, express_1.Router)();
+router.use('/auth', authRoutes_1.default);
+router.use('/dashboard', dashboardRoutes_1.default);
+router.use('/rooms', roomRoutes_1.default);
+router.use('/bookings', bookingRoutes_1.default);
+router.use('/guests', guestRoutes_1.default);
+router.use('/users', userRoutes_1.default);
+router.use('/payments', paymentRoutes_1.default);
+router.use('/notifications', notificationRoutes_1.default);
+exports.default = router;

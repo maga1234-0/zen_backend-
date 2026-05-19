@@ -1,0 +1,106 @@
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const auth_1 = require("../middleware/auth");
+const database_1 = __importDefault(require("../config/database"));
+const router = (0, express_1.Router)();
+router.use(auth_1.authenticate);
+// Get all guests
+router.get('/', async (req, res) => {
+    try {
+        const result = await database_1.default.query(`SELECT * FROM guests ORDER BY created_at DESC`);
+        res.json(result.rows);
+    }
+    catch (error) {
+        console.error('Get guests error:', error);
+        res.status(500).json({ message: 'Server error' });
+    }
+});
+// Create guest
+router.post('/', async (req, res) => {
+    try {
+        const { firstName, lastName, email, phone, idType, idNumber, address, city, country } = req.body;
+        console.log('Creating guest:', { firstName, lastName, email, phone });
+        // Check if guest with same name already exists (case-insensitive)
+        const existingGuest = await database_1.default.query(`SELECT * FROM guests 
+       WHERE LOWER(TRIM(first_name)) = LOWER(TRIM($1)) 
+       AND LOWER(TRIM(last_name)) = LOWER(TRIM($2))`, [firstName, lastName]);
+        if (existingGuest.rows.length > 0) {
+            console.log('⚠️ Guest already exists:', existingGuest.rows[0]);
+            return res.status(200).json(existingGuest.rows[0]); // Return existing guest instead of error
+        }
+        const result = await database_1.default.query(`INSERT INTO guests (first_name, last_name, email, phone, id_type, id_number, address, city, country)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+       RETURNING *`, [
+            firstName?.trim() || '',
+            lastName?.trim() || '',
+            email?.trim() || null,
+            phone?.trim() || null, // Allow NULL for phone
+            idType?.trim() || null,
+            idNumber?.trim() || null,
+            address?.trim() || null,
+            city?.trim() || null,
+            country?.trim() || null
+        ]);
+        console.log('✅ Guest created:', result.rows[0]);
+        res.status(201).json(result.rows[0]);
+    }
+    catch (error) {
+        console.error('❌ Create guest error:', error);
+        res.status(500).json({ message: 'Server error', error: error.message });
+    }
+});
+// Update guest
+router.put('/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { firstName, lastName, email, phone, idType, idNumber, address, city, country } = req.body;
+        const result = await database_1.default.query(`UPDATE guests 
+       SET first_name = $1, last_name = $2, email = $3, phone = $4, 
+           id_type = $5, id_number = $6, address = $7, city = $8, country = $9,
+           updated_at = NOW()
+       WHERE id = $10
+       RETURNING *`, [firstName, lastName, email, phone, idType, idNumber, address, city, country, id]);
+        if (result.rows.length === 0) {
+            return res.status(404).json({ message: 'Guest not found' });
+        }
+        res.json(result.rows[0]);
+    }
+    catch (error) {
+        console.error('Update guest error:', error);
+        res.status(500).json({ message: 'Server error', error: error.message });
+    }
+});
+// Delete guest
+router.delete('/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        // Check if guest has any associated bookings
+        const bookingsCheck = await database_1.default.query('SELECT COUNT(*) as booking_count FROM bookings WHERE guest_id = $1', [id]);
+        const bookingCount = parseInt(bookingsCheck.rows[0].booking_count);
+        if (bookingCount > 0) {
+            return res.status(400).json({
+                message: `Cannot delete guest with ${bookingCount} associated booking(s). Please delete or update the bookings first.`
+            });
+        }
+        const result = await database_1.default.query('DELETE FROM guests WHERE id = $1 RETURNING *', [id]);
+        if (result.rows.length === 0) {
+            return res.status(404).json({ message: 'Guest not found' });
+        }
+        res.json({ message: 'Guest deleted successfully' });
+    }
+    catch (error) {
+        console.error('Delete guest error:', error);
+        // Check for foreign key constraint violation
+        if (error.code === '23503') { // PostgreSQL foreign key violation
+            return res.status(400).json({
+                message: 'Cannot delete guest with associated bookings. Please delete or update the bookings first.'
+            });
+        }
+        res.status(500).json({ message: 'Server error', error: error.message });
+    }
+});
+exports.default = router;

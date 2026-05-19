@@ -12,7 +12,9 @@
     "dev:js": "nodemon server.js",
     "build": "tsc",
     "build:simple": "tsc src/server-simple.ts --outDir dist --module commonjs --target ES2020",
-    "start": "node server.js",
+    "start": "node dist/server.js",
+    "start:dev": "node -r ts-node/register src/server.ts",
+    "start:js": "node server.js",
     "start:simple": "node -r ts-node/register src/server-simple.ts",
     "db:migrate": "node scripts/migrate.js",
     "db:seed": "node scripts/seed.js"
