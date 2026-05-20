@@ -74,7 +74,7 @@ app.use('/api', routes);
 
 // Health check
 app.get('/health', (req, res) => {
-  res.json({ status: 'OK', timestamp: new Date().toISOString() });
+  res.status(200).send('OK');
 });
 
 // Add API root endpoint
