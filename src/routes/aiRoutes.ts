@@ -6,12 +6,12 @@ import {
   analyzeSentiment,
   predictTrends
 } from '../controllers/aiController';
-import { authenticateToken } from '../middleware/auth';
+import { authenticate } from '../middleware/auth';
 
 const router = Router();
 
 // All AI routes require authentication
-router.use(authenticateToken);
+router.use(authenticate);
 
 /**
  * @route   POST /api/ai/chat
