@@ -7,6 +7,7 @@ import guestRoutes from './guestRoutes';
 import userRoutes from './userRoutes';
 import paymentRoutes from './paymentRoutes';
 import notificationRoutes from './notificationRoutes';
+import aiRoutes from './aiRoutes';
 
 const router = Router();
 
@@ -18,5 +19,6 @@ router.use('/guests', guestRoutes);
 router.use('/users', userRoutes);
 router.use('/payments', paymentRoutes);
 router.use('/notifications', notificationRoutes);
+router.use('/ai', aiRoutes);
 
 export default router;
