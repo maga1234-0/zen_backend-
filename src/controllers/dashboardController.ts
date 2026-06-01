@@ -4,7 +4,17 @@ import { AuthRequest } from '../middleware/auth';
 
 export const getDashboardStats = async (req: AuthRequest, res: Response) => {
   try {
-    const hotelId = '550e8400-e29b-41d4-a716-446655440000'; // Default hotel
+    // Get the first available hotel dynamically
+    const hotelResult = await pool.query('SELECT id FROM hotels LIMIT 1');
+    
+    if (hotelResult.rows.length === 0) {
+      return res.status(404).json({ 
+        message: 'No hotel found. Please create a hotel first.',
+        error: 'NO_HOTEL_FOUND'
+      });
+    }
+    
+    const hotelId = hotelResult.rows[0].id;
 
     // Total bookings
     const bookingsResult = await pool.query(
@@ -55,7 +65,14 @@ export const getDashboardStats = async (req: AuthRequest, res: Response) => {
 
 export const getBookingTrends = async (req: AuthRequest, res: Response) => {
   try {
-    const hotelId = '550e8400-e29b-41d4-a716-446655440000';
+    // Get the first available hotel dynamically
+    const hotelResult = await pool.query('SELECT id FROM hotels LIMIT 1');
+    
+    if (hotelResult.rows.length === 0) {
+      return res.json([]); // Return empty array if no hotel
+    }
+    
+    const hotelId = hotelResult.rows[0].id;
 
     const result = await pool.query(
       `SELECT 
@@ -77,7 +94,14 @@ export const getBookingTrends = async (req: AuthRequest, res: Response) => {
 
 export const getRevenueAnalytics = async (req: AuthRequest, res: Response) => {
   try {
-    const hotelId = '550e8400-e29b-41d4-a716-446655440000';
+    // Get the first available hotel dynamically
+    const hotelResult = await pool.query('SELECT id FROM hotels LIMIT 1');
+    
+    if (hotelResult.rows.length === 0) {
+      return res.json([]); // Return empty array if no hotel
+    }
+    
+    const hotelId = hotelResult.rows[0].id;
 
     const result = await pool.query(
       `SELECT 
@@ -101,7 +125,14 @@ export const getRevenueAnalytics = async (req: AuthRequest, res: Response) => {
 
 export const getRecentActivities = async (req: AuthRequest, res: Response) => {
   try {
-    const hotelId = '550e8400-e29b-41d4-a716-446655440000';
+    // Get the first available hotel dynamically
+    const hotelResult = await pool.query('SELECT id FROM hotels LIMIT 1');
+    
+    if (hotelResult.rows.length === 0) {
+      return res.json([]); // Return empty array if no hotel
+    }
+    
+    const hotelId = hotelResult.rows[0].id;
 
     const result = await pool.query(
       `SELECT 
