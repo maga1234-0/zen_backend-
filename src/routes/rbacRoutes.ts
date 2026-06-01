@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { authenticateToken } from '../middleware/auth';
+import { authenticate } from '../middleware/auth';
 import { checkPermission, checkRole } from '../middleware/rbac';
 import {
   // Rôles
@@ -26,7 +26,7 @@ import {
 const router = Router();
 
 // Toutes les routes nécessitent une authentification
-router.use(authenticateToken);
+router.use(authenticate);
 
 // ============================================
 // ROUTES - RÔLES
