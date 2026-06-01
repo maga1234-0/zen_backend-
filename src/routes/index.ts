@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import authRoutes from './authRoutes';
 import dashboardRoutes from './dashboardRoutes';
+import hotelRoutes from './hotelRoutes';
 import roomRoutes from './roomRoutes';
 import bookingRoutes from './bookingRoutes';
 import guestRoutes from './guestRoutes';
@@ -16,6 +17,7 @@ const router = Router();
 
 router.use('/auth', authRoutes);
 router.use('/dashboard', dashboardRoutes);
+router.use('/hotels', hotelRoutes);
 router.use('/rooms', roomRoutes);
 router.use('/bookings', bookingRoutes);
 router.use('/guests', guestRoutes);
