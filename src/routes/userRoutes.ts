@@ -148,6 +148,60 @@ router.put('/change-password', async (req, res) => {
   }
 });
 
+// Admin reset password endpoint
+router.put('/:id/reset-password', async (req, res) => {
+  try {
+    const adminId = (req as any).user.id;
+    const adminRole = (req as any).user.role;
+    const { id: targetUserId } = req.params;
+    const { newPassword } = req.body;
+
+    // Check if user is admin or manager
+    if (adminRole !== 'admin' && adminRole !== 'manager') {
+      return res.status(403).json({ message: 'Only admins and managers can reset passwords' });
+    }
+
+    if (!newPassword) {
+      return res.status(400).json({ message: 'New password is required' });
+    }
+
+    if (newPassword.length < 6) {
+      return res.status(400).json({ message: 'Password must be at least 6 characters' });
+    }
+
+    // Check if target user exists
+    const userResult = await pool.query(
+      'SELECT id, email, first_name, last_name FROM users WHERE id = $1',
+      [targetUserId]
+    );
+
+    if (userResult.rows.length === 0) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    const targetUser = userResult.rows[0];
+
+    // Update password
+    await pool.query(
+      'UPDATE users SET password = $1, updated_at = NOW() WHERE id = $2',
+      [newPassword, targetUserId]
+    );
+
+    console.log(`✅ Password reset by admin ${adminId} for user ${targetUserId} (${targetUser.email})`);
+    res.json({ 
+      message: 'Password reset successfully',
+      user: {
+        id: targetUser.id,
+        email: targetUser.email,
+        name: `${targetUser.first_name} ${targetUser.last_name}`
+      }
+    });
+  } catch (error: any) {
+    console.error('❌ Admin reset password error:', error);
+    res.status(500).json({ message: 'Server error: ' + error.message });
+  }
+});
+
 // Upload profile picture endpoint
 router.put('/profile-picture', async (req, res) => {
   try {
