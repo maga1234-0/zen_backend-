@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { getAllUsers, createUser, updateUser, deleteUser } from '../controllers/userController';
 import { authenticate } from '../middleware/auth';
 import pool from '../config/database';
+import bcrypt from 'bcryptjs';
 
 const router = Router();
 
@@ -129,15 +130,17 @@ router.put('/change-password', async (req, res) => {
 
     const user = userResult.rows[0];
 
-    // Verify current password (plain text comparison for now)
-    if (user.password_hash !== currentPassword) {
+    // Verify current password using bcrypt
+    const isMatch = await bcrypt.compare(currentPassword, user.password_hash);
+    if (!isMatch) {
       return res.status(401).json({ message: 'Current password is incorrect' });
     }
 
-    // Update password
+    // Update password with bcrypt hashing
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
     await pool.query(
       'UPDATE users SET password_hash = $1, updated_at = NOW() WHERE id = $2',
-      [newPassword, userId]
+      [hashedPassword, userId]
     );
 
     console.log(`✅ Password changed for user ${userId}`);
@@ -181,10 +184,11 @@ router.put('/:id/reset-password', async (req, res) => {
 
     const targetUser = userResult.rows[0];
 
-    // Update password
+    // Update password with bcrypt hashing
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
     await pool.query(
       'UPDATE users SET password_hash = $1, updated_at = NOW() WHERE id = $2',
-      [newPassword, targetUserId]
+      [hashedPassword, targetUserId]
     );
 
     console.log(`✅ Password reset by admin ${adminId} for user ${targetUserId} (${targetUser.email})`);
