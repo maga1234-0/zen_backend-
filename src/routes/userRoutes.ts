@@ -119,7 +119,7 @@ router.put('/change-password', async (req, res) => {
 
     // Get user's current password
     const userResult = await pool.query(
-      'SELECT password FROM users WHERE id = $1',
+      'SELECT password_hash FROM users WHERE id = $1',
       [userId]
     );
 
@@ -130,13 +130,13 @@ router.put('/change-password', async (req, res) => {
     const user = userResult.rows[0];
 
     // Verify current password (plain text comparison for now)
-    if (user.password !== currentPassword) {
+    if (user.password_hash !== currentPassword) {
       return res.status(401).json({ message: 'Current password is incorrect' });
     }
 
     // Update password
     await pool.query(
-      'UPDATE users SET password = $1, updated_at = NOW() WHERE id = $2',
+      'UPDATE users SET password_hash = $1, updated_at = NOW() WHERE id = $2',
       [newPassword, userId]
     );
 
@@ -183,7 +183,7 @@ router.put('/:id/reset-password', async (req, res) => {
 
     // Update password
     await pool.query(
-      'UPDATE users SET password = $1, updated_at = NOW() WHERE id = $2',
+      'UPDATE users SET password_hash = $1, updated_at = NOW() WHERE id = $2',
       [newPassword, targetUserId]
     );
 
