@@ -8,6 +8,9 @@ import {
   deleteMenuItem,
   // Tables
   getRestaurantTables,
+  createTable,
+  updateTable,
+  deleteTable,
   updateTableStatus,
   // Orders
   getOrders,
@@ -50,6 +53,11 @@ router.get('/tables', checkAnyPermission([
   ['restaurant.tables', 'read'],
   ['restaurant.orders', 'read']
 ]), getRestaurantTables);
+
+// Only managers can create, update, or delete tables
+router.post('/tables', checkPermission('restaurant.tables', 'create'), createTable);
+router.put('/tables/:id', checkPermission('restaurant.tables', 'update'), updateTable);
+router.delete('/tables/:id', checkPermission('restaurant.tables', 'delete'), deleteTable);
 
 // Only staff can update table status
 router.put('/tables/:id/status', checkPermission('restaurant.tables', 'update_status'), updateTableStatus);

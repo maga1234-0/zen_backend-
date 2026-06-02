@@ -186,6 +186,113 @@ export const updateTableStatus = async (req: AuthRequest, res: Response) => {
   }
 };
 
+export const createTable = async (req: AuthRequest, res: Response) => {
+  try {
+    const { table_number, capacity, location, notes } = req.body;
+
+    // Check if table number already exists
+    const existingTable = await pool.query(
+      'SELECT id FROM restaurant_tables WHERE table_number = $1',
+      [table_number]
+    );
+
+    if (existingTable.rows.length > 0) {
+      return res.status(400).json({ message: 'Table number already exists' });
+    }
+
+    const result = await pool.query(
+      `INSERT INTO restaurant_tables (table_number, capacity, location, notes, status)
+       VALUES ($1, $2, $3, $4, 'available')
+       RETURNING *`,
+      [table_number, capacity, location, notes || null]
+    );
+
+    res.status(201).json(result.rows[0]);
+  } catch (error) {
+    console.error('Create table error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+export const updateTable = async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { table_number, capacity, location, notes } = req.body;
+
+    // Check if new table number already exists (excluding current table)
+    const existingTable = await pool.query(
+      'SELECT id FROM restaurant_tables WHERE table_number = $1 AND id != $2',
+      [table_number, id]
+    );
+
+    if (existingTable.rows.length > 0) {
+      return res.status(400).json({ message: 'Table number already exists' });
+    }
+
+    const result = await pool.query(
+      `UPDATE restaurant_tables 
+       SET table_number = $1, capacity = $2, location = $3, notes = $4, updated_at = CURRENT_TIMESTAMP
+       WHERE id = $5
+       RETURNING *`,
+      [table_number, capacity, location, notes || null, id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: 'Table not found' });
+    }
+
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('Update table error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+export const deleteTable = async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    // Check if table has active reservations or orders
+    const activeReservations = await pool.query(
+      `SELECT id FROM table_reservations 
+       WHERE table_id = $1 AND status IN ('pending', 'confirmed', 'seated')`,
+      [id]
+    );
+
+    if (activeReservations.rows.length > 0) {
+      return res.status(400).json({ 
+        message: 'Cannot delete table with active reservations. Please cancel reservations first.' 
+      });
+    }
+
+    const activeOrders = await pool.query(
+      `SELECT id FROM restaurant_orders 
+       WHERE table_id = $1 AND status NOT IN ('completed', 'cancelled')`,
+      [id]
+    );
+
+    if (activeOrders.rows.length > 0) {
+      return res.status(400).json({ 
+        message: 'Cannot delete table with active orders. Please complete orders first.' 
+      });
+    }
+
+    const result = await pool.query(
+      'DELETE FROM restaurant_tables WHERE id = $1 RETURNING *',
+      [id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: 'Table not found' });
+    }
+
+    res.json({ message: 'Table deleted successfully', table: result.rows[0] });
+  } catch (error) {
+    console.error('Delete table error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
 
 // ============================================
 // ORDERS MANAGEMENT
