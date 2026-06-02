@@ -304,6 +304,12 @@ export const createOrder = async (req: AuthRequest, res: Response) => {
     const finalPaymentMethod = payment_method || (order_type === 'room_service' ? 'room_charge' : null);
     const paymentStatus = order_type === 'room_service' ? 'charged_to_room' : 'unpaid';
 
+    // Convert empty strings to null for UUID fields
+    const cleanTableId = table_id && table_id.trim() !== '' ? table_id : null;
+    const cleanGuestId = guest_id && guest_id.trim() !== '' ? guest_id : null;
+    const cleanRoomId = room_id && room_id.trim() !== '' ? room_id : null;
+    const cleanBookingId = booking_id && booking_id.trim() !== '' ? booking_id : null;
+
     // Create order
     const orderResult = await client.query(
       `INSERT INTO restaurant_orders 
@@ -312,7 +318,7 @@ export const createOrder = async (req: AuthRequest, res: Response) => {
         payment_method, payment_status, server_id, created_by)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
        RETURNING *`,
-      [order_number, table_id, guest_id, room_id, booking_id, order_type,
+      [order_number, cleanTableId, cleanGuestId, cleanRoomId, cleanBookingId, order_type,
        subtotal, tax, service_charge, total_amount, special_instructions,
        finalPaymentMethod, paymentStatus,
        req.user?.id, req.user?.id]
