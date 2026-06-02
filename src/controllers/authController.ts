@@ -79,3 +79,32 @@ export const getProfile = async (req: AuthRequest, res: Response) => {
     res.status(500).json({ message: 'Server error' });
   }
 };
+
+/**
+ * Get all available roles from the database
+ */
+export const getRoles = async (req: AuthRequest, res: Response) => {
+  try {
+    const result = await pool.query(
+      `SELECT id, name, description, is_active 
+       FROM roles 
+       WHERE is_active = true 
+       ORDER BY 
+         CASE name
+           WHEN 'admin' THEN 1
+           WHEN 'manager' THEN 2
+           WHEN 'receptionist' THEN 3
+           WHEN 'housekeeping' THEN 4
+           WHEN 'maintenance' THEN 5
+           WHEN 'accountant' THEN 6
+           ELSE 99
+         END,
+         name`
+    );
+
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Get roles error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
