@@ -297,8 +297,12 @@ export const createOrder = async (req: AuthRequest, res: Response) => {
     }
     
     const tax = subtotal * 0.10; // 10% tax
-    const service_charge = order_type === 'room_service' ? subtotal * 0.05 : 0; // 5% for room service
+    const service_charge = order_type === 'room_service' ? subtotal * 0.15 : 0; // 15% for room service
     const total_amount = subtotal + tax + service_charge;
+
+    // Determine payment method and status
+    const finalPaymentMethod = payment_method || (order_type === 'room_service' ? 'room_charge' : null);
+    const paymentStatus = order_type === 'room_service' ? 'charged_to_room' : 'unpaid';
 
     // Create order
     const orderResult = await client.query(
@@ -310,7 +314,7 @@ export const createOrder = async (req: AuthRequest, res: Response) => {
        RETURNING *`,
       [order_number, table_id, guest_id, room_id, booking_id, order_type,
        subtotal, tax, service_charge, total_amount, special_instructions,
-       payment_method, payment_method === 'room_charge' ? 'charged_to_room' : 'unpaid',
+       finalPaymentMethod, paymentStatus,
        req.user?.id, req.user?.id]
     );
 
@@ -323,7 +327,7 @@ export const createOrder = async (req: AuthRequest, res: Response) => {
          (order_id, menu_item_id, item_name, quantity, unit_price, subtotal, special_instructions)
          VALUES ($1, $2, $3, $4, $5, $6, $7)`,
         [order.id, item.menu_item_id, item.item_name, item.quantity,
-         item.unit_price, item.unit_price * item.quantity, item.special_instructions]
+         item.unit_price, item.unit_price * item.quantity, item.special_instructions || '']
       );
     }
 
@@ -342,7 +346,8 @@ export const createOrder = async (req: AuthRequest, res: Response) => {
   } catch (error) {
     await client.query('ROLLBACK');
     console.error('Create order error:', error);
-    res.status(500).json({ message: 'Server error' });
+    console.error('Error details:', error);
+    res.status(500).json({ message: 'Server error', error: error instanceof Error ? error.message : 'Unknown error' });
   } finally {
     client.release();
   }
