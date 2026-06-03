@@ -642,6 +642,155 @@ export const updateReservationStatus = async (req: AuthRequest, res: Response) =
   }
 };
 
+/**
+ * Update a complete reservation (status, date/time, guests, etc.)
+ */
+export const updateReservation = async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    const {
+      table_id,
+      guest_name,
+      guest_phone,
+      guest_email,
+      number_of_guests,
+      reservation_date,
+      reservation_time,
+      duration_minutes,
+      status,
+      special_requests,
+      arrived_at
+    } = req.body;
+
+    // Get current reservation to check table_id changes
+    const currentReservation = await pool.query(
+      'SELECT table_id, reservation_date, reservation_time, duration_minutes, status FROM table_reservations WHERE id = $1',
+      [id]
+    );
+
+    if (currentReservation.rows.length === 0) {
+      return res.status(404).json({ message: 'Reservation not found' });
+    }
+
+    const oldTableId = currentReservation.rows[0].table_id;
+    const oldStatus = currentReservation.rows[0].status;
+
+    // If table_id, date, or time is changing, check for conflicts
+    if (table_id && (
+      table_id !== oldTableId ||
+      reservation_date !== currentReservation.rows[0].reservation_date ||
+      reservation_time !== currentReservation.rows[0].reservation_time
+    )) {
+      const conflictCheck = await pool.query(
+        `SELECT id FROM table_reservations 
+         WHERE table_id = $1 
+         AND id != $2
+         AND reservation_date = $3 
+         AND status NOT IN ('cancelled', 'completed', 'no_show')
+         AND (
+           (reservation_time <= $4 AND reservation_time + (duration_minutes || ' minutes')::INTERVAL > $4)
+           OR
+           (reservation_time < $4 + ($5 || ' minutes')::INTERVAL AND reservation_time >= $4)
+         )`,
+        [table_id, id, reservation_date, reservation_time, duration_minutes || 120]
+      );
+
+      if (conflictCheck.rows.length > 0) {
+        return res.status(400).json({ message: 'Table is not available at this time' });
+      }
+    }
+
+    // Set arrived_at to now if status is being changed to 'seated' and arrived_at is not provided
+    let finalArrivedAt = arrived_at;
+    if (status === 'seated' && !arrived_at && oldStatus !== 'seated') {
+      finalArrivedAt = new Date().toISOString();
+    }
+
+    // Update reservation
+    const result = await pool.query(
+      `UPDATE table_reservations 
+       SET table_id = COALESCE($1, table_id),
+           guest_name = COALESCE($2, guest_name),
+           guest_phone = COALESCE($3, guest_phone),
+           guest_email = COALESCE($4, guest_email),
+           number_of_guests = COALESCE($5, number_of_guests),
+           reservation_date = COALESCE($6, reservation_date),
+           reservation_time = COALESCE($7, reservation_time),
+           duration_minutes = COALESCE($8, duration_minutes),
+           status = COALESCE($9, status),
+           special_requests = COALESCE($10, special_requests),
+           arrived_at = COALESCE($11, arrived_at),
+           updated_at = CURRENT_TIMESTAMP
+       WHERE id = $12
+       RETURNING *`,
+      [
+        table_id, guest_name, guest_phone, guest_email, number_of_guests,
+        reservation_date, reservation_time, duration_minutes, status, special_requests,
+        finalArrivedAt, id
+      ]
+    );
+
+    console.log('✅ Reservation updated:', result.rows[0].guest_name);
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('Update reservation error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+/**
+ * Delete a reservation and free the table
+ */
+export const deleteReservation = async (req: AuthRequest, res: Response) => {
+  const client = await pool.connect();
+  try {
+    const { id } = req.params;
+
+    await client.query('BEGIN');
+
+    // Get reservation details before deletion
+    const reservation = await client.query(
+      'SELECT table_id, guest_name FROM table_reservations WHERE id = $1',
+      [id]
+    );
+
+    if (reservation.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ message: 'Reservation not found' });
+    }
+
+    const { table_id, guest_name } = reservation.rows[0];
+
+    // Delete the reservation
+    await client.query('DELETE FROM table_reservations WHERE id = $1', [id]);
+
+    // Free the table if it was reserved
+    if (table_id) {
+      await client.query(
+        `UPDATE restaurant_tables 
+         SET status = 'available', updated_at = CURRENT_TIMESTAMP 
+         WHERE id = $1`,
+        [table_id]
+      );
+    }
+
+    await client.query('COMMIT');
+
+    console.log('✅ Reservation deleted:', guest_name);
+    res.json({ 
+      message: 'Reservation deleted successfully',
+      guest_name,
+      table_freed: !!table_id
+    });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('Delete reservation error:', error);
+    res.status(500).json({ message: 'Server error' });
+  } finally {
+    client.release();
+  }
+};
+
 // ============================================
 // STATISTICS
 // ============================================

@@ -22,6 +22,8 @@ import {
   getTableReservations,
   createTableReservation,
   updateReservationStatus,
+  updateReservation,
+  deleteReservation,
   // Stats
   getRestaurantStats
 } from '../controllers/restaurantController';
@@ -96,6 +98,12 @@ router.get('/reservations', checkAnyPermission([
 // Only managers can manage reservations
 router.post('/reservations', checkPermission('restaurant.reservations', 'create'), createTableReservation);
 router.put('/reservations/:id/status', checkPermission('restaurant.reservations', 'update'), updateReservationStatus);
+
+// Update complete reservation (date, time, guests, status, etc.)
+router.put('/reservations/:id', checkPermission('restaurant.reservations', 'update'), updateReservation);
+
+// Delete reservation
+router.delete('/reservations/:id', checkPermission('restaurant.reservations', 'delete'), deleteReservation);
 
 // ============================================
 // STATISTICS ROUTES
