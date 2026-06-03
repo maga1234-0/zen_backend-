@@ -60,29 +60,65 @@ export const checkPermission = (resource: string, action: string) => {
         return res.status(401).json({ message: 'Non authentifié' });
       }
 
-      // Récupérer les permissions de l'utilisateur depuis la base de données
+      // Récupérer le rôle de l'utilisateur directement depuis la colonne role
       const result = await pool.query(
-        `SELECT r.permissions, r.name as role_name
-         FROM users u
-         JOIN roles r ON u.role_id = r.id
-         WHERE u.id = $1`,
+        `SELECT role FROM users WHERE id = $1`,
         [req.user.id]
       );
 
       if (result.rows.length === 0) {
-        return res.status(403).json({ message: 'Rôle non trouvé' });
+        return res.status(403).json({ message: 'Utilisateur non trouvé' });
       }
 
-      const userPermissions = result.rows[0].permissions;
-      const roleName = result.rows[0].role_name;
+      const roleName = result.rows[0].role;
 
       // Admin et manager ont tous les droits
       if (roleName === 'admin' || roleName === 'manager') {
         return next();
       }
 
-      // Vérifier la permission
-      if (!hasPermission(userPermissions, resource, action)) {
+      // Définir les permissions en dur pour les rôles restaurant
+      const restaurantPermissions: Record<string, Record<string, string[]>> = {
+        restaurant_server: {
+          'restaurant.orders': ['read', 'create'],
+          'restaurant.menu': ['read'],
+          'restaurant.tables': ['read'],
+          'restaurant.print': ['tickets']
+        },
+        restaurant_cashier: {
+          'restaurant.orders': ['read', 'update_payment'],
+          'restaurant.menu': ['read'],
+          'restaurant.payments': ['create', 'refund'],
+          'restaurant.print': ['invoices']
+        },
+        restaurant_manager: {
+          'restaurant.orders': ['read', 'create', 'update', 'update_status', 'update_payment'],
+          'restaurant.menu': ['read', 'create', 'update', 'delete'],
+          'restaurant.tables': ['read', 'create', 'update', 'delete', 'update_status'],
+          'restaurant.reservations': ['read', 'create', 'update', 'delete'],
+          'restaurant.payments': ['create', 'refund'],
+          'restaurant.stats': ['read'],
+          'restaurant.print': ['tickets', 'invoices']
+        },
+        restaurant_chef: {
+          'restaurant.orders': ['read', 'update_status'],
+          'restaurant.menu': ['read'],
+          'restaurant.stats': ['read_production'],
+          'restaurant.print': ['tickets']
+        }
+      };
+
+      // Vérifier si le rôle a la permission
+      const rolePerms = restaurantPermissions[roleName];
+      if (!rolePerms) {
+        return res.status(403).json({ 
+          message: 'Rôle non autorisé',
+          role: roleName
+        });
+      }
+
+      const resourcePerms = rolePerms[resource];
+      if (!resourcePerms || !resourcePerms.includes(action)) {
         return res.status(403).json({ 
           message: 'Permission refusée',
           required: `${resource}.${action}`,
@@ -113,30 +149,67 @@ export const checkAnyPermission = (permissionPairs: [string, string][]) => {
         return res.status(401).json({ message: 'Non authentifié' });
       }
 
+      // Récupérer le rôle de l'utilisateur directement depuis la colonne role
       const result = await pool.query(
-        `SELECT r.permissions, r.name as role_name
-         FROM users u
-         JOIN roles r ON u.role_id = r.id
-         WHERE u.id = $1`,
+        `SELECT role FROM users WHERE id = $1`,
         [req.user.id]
       );
 
       if (result.rows.length === 0) {
-        return res.status(403).json({ message: 'Rôle non trouvé' });
+        return res.status(403).json({ message: 'Utilisateur non trouvé' });
       }
 
-      const userPermissions = result.rows[0].permissions;
-      const roleName = result.rows[0].role_name;
+      const roleName = result.rows[0].role;
 
       // Admin et manager ont tous les droits
       if (roleName === 'admin' || roleName === 'manager') {
         return next();
       }
 
-      // Vérifier si au moins une permission est accordée
-      const hasAnyPermission = permissionPairs.some(([resource, action]) =>
-        hasPermission(userPermissions, resource, action)
-      );
+      // Définir les permissions en dur pour les rôles restaurant
+      const restaurantPermissions: Record<string, Record<string, string[]>> = {
+        restaurant_server: {
+          'restaurant.orders': ['read', 'create'],
+          'restaurant.menu': ['read'],
+          'restaurant.tables': ['read'],
+          'restaurant.print': ['tickets']
+        },
+        restaurant_cashier: {
+          'restaurant.orders': ['read', 'update_payment'],
+          'restaurant.menu': ['read'],
+          'restaurant.payments': ['create', 'refund'],
+          'restaurant.print': ['invoices']
+        },
+        restaurant_manager: {
+          'restaurant.orders': ['read', 'create', 'update', 'update_status', 'update_payment'],
+          'restaurant.menu': ['read', 'create', 'update', 'delete'],
+          'restaurant.tables': ['read', 'create', 'update', 'delete', 'update_status'],
+          'restaurant.reservations': ['read', 'create', 'update', 'delete'],
+          'restaurant.payments': ['create', 'refund'],
+          'restaurant.stats': ['read'],
+          'restaurant.print': ['tickets', 'invoices']
+        },
+        restaurant_chef: {
+          'restaurant.orders': ['read', 'update_status'],
+          'restaurant.menu': ['read'],
+          'restaurant.stats': ['read_production'],
+          'restaurant.print': ['tickets']
+        }
+      };
+
+      // Vérifier si le rôle a au moins une des permissions
+      const rolePerms = restaurantPermissions[roleName];
+      if (!rolePerms) {
+        return res.status(403).json({ 
+          message: 'Rôle non autorisé',
+          role: roleName
+        });
+      }
+
+      const hasAnyPermission = permissionPairs.some(([resource, action]) => {
+        const resourcePerms = rolePerms[resource];
+        return resourcePerms && resourcePerms.includes(action);
+      });
 
       if (!hasAnyPermission) {
         return res.status(403).json({ 
@@ -169,30 +242,67 @@ export const checkOwnership = (
         return res.status(401).json({ message: 'Non authentifié' });
       }
 
+      // Récupérer le rôle de l'utilisateur directement depuis la colonne role
       const result = await pool.query(
-        `SELECT r.permissions, r.name as role_name
-         FROM users u
-         JOIN roles r ON u.role_id = r.id
-         WHERE u.id = $1`,
+        `SELECT role FROM users WHERE id = $1`,
         [req.user.id]
       );
 
       if (result.rows.length === 0) {
-        return res.status(403).json({ message: 'Rôle non trouvé' });
+        return res.status(403).json({ message: 'Utilisateur non trouvé' });
       }
 
-      const userPermissions = result.rows[0].permissions;
-      const roleName = result.rows[0].role_name;
+      const roleName = result.rows[0].role;
 
       // Admin et manager ont tous les droits
       if (roleName === 'admin' || roleName === 'manager') {
         return next();
       }
 
+      // Définir les permissions en dur pour les rôles restaurant
+      const restaurantPermissions: Record<string, Record<string, string[]>> = {
+        restaurant_server: {
+          'restaurant.orders': ['read', 'create', 'update_own'],
+          'restaurant.menu': ['read'],
+          'restaurant.tables': ['read'],
+          'restaurant.print': ['tickets']
+        },
+        restaurant_cashier: {
+          'restaurant.orders': ['read', 'update_payment'],
+          'restaurant.menu': ['read'],
+          'restaurant.payments': ['create', 'refund'],
+          'restaurant.print': ['invoices']
+        },
+        restaurant_manager: {
+          'restaurant.orders': ['read', 'create', 'update', 'update_status', 'update_payment', 'update_own'],
+          'restaurant.menu': ['read', 'create', 'update', 'delete'],
+          'restaurant.tables': ['read', 'create', 'update', 'delete', 'update_status'],
+          'restaurant.reservations': ['read', 'create', 'update', 'delete'],
+          'restaurant.payments': ['create', 'refund'],
+          'restaurant.stats': ['read'],
+          'restaurant.print': ['tickets', 'invoices']
+        },
+        restaurant_chef: {
+          'restaurant.orders': ['read', 'update_status'],
+          'restaurant.menu': ['read'],
+          'restaurant.stats': ['read_production'],
+          'restaurant.print': ['tickets']
+        }
+      };
+
       // Vérifier la permission de base
       const actionToCheck = action === 'update_own' ? 'update_own' : action;
       
-      if (!hasPermission(userPermissions, resource, actionToCheck)) {
+      const rolePerms = restaurantPermissions[roleName];
+      if (!rolePerms) {
+        return res.status(403).json({ 
+          message: 'Rôle non autorisé',
+          role: roleName
+        });
+      }
+
+      const resourcePerms = rolePerms[resource];
+      if (!resourcePerms || !resourcePerms.includes(actionToCheck)) {
         return res.status(403).json({ 
           message: 'Permission refusée',
           required: `${resource}.${actionToCheck}`,
