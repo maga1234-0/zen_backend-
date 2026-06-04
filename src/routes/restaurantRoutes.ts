@@ -16,6 +16,8 @@ import {
   getOrders,
   getOrderById,
   createOrder,
+  updateOrder,
+  deleteOrder,
   updateOrderStatus,
   updateOrderPayment,
   // Reservations
@@ -73,6 +75,12 @@ router.get('/orders/:id', checkPermission('restaurant.orders', 'read'), getOrder
 
 // Servers, managers, and admin can create orders
 router.post('/orders', checkPermission('restaurant.orders', 'create'), createOrder);
+
+// Managers can update complete order
+router.put('/orders/:id', checkPermission('restaurant.orders', 'update'), updateOrder);
+
+// Managers can delete orders
+router.delete('/orders/:id', checkPermission('restaurant.orders', 'delete'), deleteOrder);
 
 // Chef and managers can update order status (kitchen workflow)
 router.put('/orders/:id/status', checkAnyPermission([

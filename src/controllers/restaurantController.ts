@@ -524,6 +524,172 @@ export const updateOrderPayment = async (req: AuthRequest, res: Response) => {
   }
 };
 
+/**
+ * Update order details (table, special instructions, etc.)
+ */
+export const updateOrder = async (req: AuthRequest, res: Response) => {
+  const client = await pool.connect();
+  try {
+    const { id } = req.params;
+    const { table_id, special_instructions, items } = req.body;
+
+    await client.query('BEGIN');
+
+    // Get current order
+    const currentOrder = await client.query(
+      'SELECT * FROM restaurant_orders WHERE id = $1',
+      [id]
+    );
+
+    if (currentOrder.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ message: 'Order not found' });
+    }
+
+    const order = currentOrder.rows[0];
+
+    // Update order basic info
+    const cleanTableId = table_id && table_id.trim() !== '' ? table_id : null;
+    
+    await client.query(
+      `UPDATE restaurant_orders 
+       SET table_id = COALESCE($1, table_id),
+           special_instructions = COALESCE($2, special_instructions),
+           updated_at = CURRENT_TIMESTAMP
+       WHERE id = $3`,
+      [cleanTableId, special_instructions, id]
+    );
+
+    // If items are provided, update them
+    if (items && items.length > 0) {
+      // Delete old items
+      await client.query('DELETE FROM restaurant_order_items WHERE order_id = $1', [id]);
+
+      // Calculate new totals
+      let subtotal = 0;
+      for (const item of items) {
+        subtotal += item.unit_price * item.quantity;
+        
+        // Insert new items
+        await client.query(
+          `INSERT INTO restaurant_order_items 
+           (order_id, menu_item_id, item_name, quantity, unit_price, subtotal, special_instructions)
+           VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+          [id, item.menu_item_id, item.item_name, item.quantity,
+           item.unit_price, item.unit_price * item.quantity, item.special_instructions || '']
+        );
+      }
+
+      // Update order totals
+      const tax = subtotal * 0.10;
+      const service_charge = order.order_type === 'room_service' ? subtotal * 0.15 : 0;
+      const total_amount = subtotal + tax + service_charge;
+
+      await client.query(
+        `UPDATE restaurant_orders 
+         SET subtotal = $1, tax = $2, service_charge = $3, total_amount = $4
+         WHERE id = $5`,
+        [subtotal, tax, service_charge, total_amount, id]
+      );
+    }
+
+    // Update table status if table changed
+    if (table_id && table_id !== order.table_id) {
+      // Free old table
+      if (order.table_id) {
+        await client.query(
+          'UPDATE restaurant_tables SET status = $1 WHERE id = $2',
+          ['available', order.table_id]
+        );
+      }
+      // Occupy new table
+      if (order.order_type === 'dine_in' && table_id) {
+        await client.query(
+          'UPDATE restaurant_tables SET status = $1 WHERE id = $2',
+          ['occupied', table_id]
+        );
+      }
+    }
+
+    await client.query('COMMIT');
+
+    // Fetch updated order with all details
+    const updatedOrder = await client.query(
+      `SELECT o.*, 
+              t.table_number, t.location as table_location,
+              u.first_name || ' ' || u.last_name as server_name
+       FROM restaurant_orders o
+       LEFT JOIN restaurant_tables t ON o.table_id = t.id
+       LEFT JOIN users u ON o.server_id = u.id
+       WHERE o.id = $1`,
+      [id]
+    );
+
+    console.log('✅ Order updated:', updatedOrder.rows[0].order_number);
+    res.json(updatedOrder.rows[0]);
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('Update order error:', error);
+    res.status(500).json({ message: 'Server error', error: error instanceof Error ? error.message : 'Unknown error' });
+  } finally {
+    client.release();
+  }
+};
+
+/**
+ * Delete an order
+ */
+export const deleteOrder = async (req: AuthRequest, res: Response) => {
+  const client = await pool.connect();
+  try {
+    const { id } = req.params;
+
+    await client.query('BEGIN');
+
+    // Get order details before deletion
+    const order = await client.query(
+      'SELECT table_id, order_number, order_type FROM restaurant_orders WHERE id = $1',
+      [id]
+    );
+
+    if (order.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ message: 'Order not found' });
+    }
+
+    const { table_id, order_number, order_type } = order.rows[0];
+
+    // Delete order items first (foreign key constraint)
+    await client.query('DELETE FROM restaurant_order_items WHERE order_id = $1', [id]);
+
+    // Delete the order
+    await client.query('DELETE FROM restaurant_orders WHERE id = $1', [id]);
+
+    // Free the table if it was occupied
+    if (table_id && order_type === 'dine_in') {
+      await client.query(
+        'UPDATE restaurant_tables SET status = $1 WHERE id = $2',
+        ['available', table_id]
+      );
+    }
+
+    await client.query('COMMIT');
+
+    console.log('✅ Order deleted:', order_number);
+    res.json({ 
+      message: 'Order deleted successfully',
+      order_number,
+      table_freed: !!table_id
+    });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('Delete order error:', error);
+    res.status(500).json({ message: 'Server error', error: error instanceof Error ? error.message : 'Unknown error' });
+  } finally {
+    client.release();
+  }
+};
+
 
 // ============================================
 // TABLE RESERVATIONS
