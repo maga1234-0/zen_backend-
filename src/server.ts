@@ -37,12 +37,16 @@ const corsOptions = {
     
     const allowedOrigins = process.env.CORS_ORIGIN ? 
       process.env.CORS_ORIGIN.split(',') : 
-      ['http://localhost:5173', 'http://localhost:5174'];
+      [
+        'http://localhost:5173', 
+        'http://localhost:5174',
+        'https://zen-lyart.vercel.app'
+      ];
     
     if (allowedOrigins.indexOf(origin) !== -1 || allowedOrigins.includes('*')) {
       callback(null, true);
     } else {
-      console.log(`❌ CORS blocked: ${origin} not in ${allowedOrigins}`);
+      console.log(`❌ CORS blocked: ${origin} not in ${allowedOrigins.join(', ')}`);
       callback(new Error('Not allowed by CORS'));
     }
   },
