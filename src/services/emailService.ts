@@ -10,6 +10,8 @@ const smtpConfig = {
     user: process.env.SMTP_USER,
     pass: process.env.SMTP_PASS,
   },
+  // Force IPv4 pour éviter les problèmes de connectivité IPv6
+  family: 4,
 };
 
 // Créer le transporteur nodemailer
