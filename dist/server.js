@@ -8,7 +8,15 @@ const cors_1 = __importDefault(require("cors"));
 const helmet_1 = __importDefault(require("helmet"));
 const morgan_1 = __importDefault(require("morgan"));
 const dotenv_1 = __importDefault(require("dotenv"));
+const path_1 = __importDefault(require("path"));
 const scheduledJobs_1 = require("./services/scheduledJobs");
+// IMPORTANT: Load environment variables FIRST before any other imports
+// Load from the root of zen_backend folder
+dotenv_1.default.config({ path: path_1.default.join(__dirname, '../.env') });
+console.log('📝 Environment loaded:');
+console.log('- DATABASE_URL:', process.env.DATABASE_URL ? '✅ Set' : '❌ Not set');
+console.log('- SMTP_USER:', process.env.SMTP_USER ? '✅ Set' : '❌ Not set');
+console.log('- PORT:', process.env.PORT || '5000');
 // Try to import routes with error handling
 let routes;
 try {
@@ -25,7 +33,6 @@ catch (error) {
         res.json({ error: 'Routes failed to load', message: error.message });
     });
 }
-dotenv_1.default.config();
 const app = (0, express_1.default)();
 const PORT = process.env.PORT || 5000;
 // Middleware
@@ -38,12 +45,16 @@ const corsOptions = {
             return callback(null, true);
         const allowedOrigins = process.env.CORS_ORIGIN ?
             process.env.CORS_ORIGIN.split(',') :
-            ['http://localhost:5173', 'http://localhost:5174'];
+            [
+                'http://localhost:5173',
+                'http://localhost:5174',
+                'https://zen-lyart.vercel.app'
+            ];
         if (allowedOrigins.indexOf(origin) !== -1 || allowedOrigins.includes('*')) {
             callback(null, true);
         }
         else {
-            console.log(`❌ CORS blocked: ${origin} not in ${allowedOrigins}`);
+            console.log(`❌ CORS blocked: ${origin} not in ${allowedOrigins.join(', ')}`);
             callback(new Error('Not allowed by CORS'));
         }
     },
@@ -71,7 +82,7 @@ app.get('/', (req, res) => {
 app.use('/api', routes);
 // Health check
 app.get('/health', (req, res) => {
-    res.json({ status: 'OK', timestamp: new Date().toISOString() });
+    res.status(200).send('OK');
 });
 // Add API root endpoint
 app.get('/api', (req, res) => {

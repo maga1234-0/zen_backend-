@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.notifyPaymentReceived = exports.notifyDirtyRoomsAlert = exports.notifyRoomCleaned = exports.notifyRoomMaintenance = exports.notifyRoomStatusChange = exports.notifyCheckOut = exports.notifyCheckIn = exports.notifyBookingCancelled = exports.notifyNewBooking = exports.createNotificationForRoles = exports.createNotification = void 0;
+exports.notifyLowStock = exports.notifyReservationCancelled = exports.notifyNewTableReservation = exports.notifyOrderStatusChange = exports.notifyNewRestaurantOrder = exports.notifyPaymentReceived = exports.notifyDirtyRoomsAlert = exports.notifyRoomCleaned = exports.notifyRoomMaintenance = exports.notifyRoomStatusChange = exports.notifyCheckOut = exports.notifyCheckIn = exports.notifyBookingCancelled = exports.notifyNewBooking = exports.createNotificationForRoles = exports.createNotification = void 0;
 const database_1 = __importDefault(require("../config/database"));
 /**
  * Create a notification for a specific user or all users
@@ -176,3 +176,75 @@ const notifyPaymentReceived = async (guestName, amount, roomNumber) => {
     });
 };
 exports.notifyPaymentReceived = notifyPaymentReceived;
+// ============================================
+// RESTAURANT NOTIFICATIONS
+// ============================================
+// New order notification - notify kitchen staff
+const notifyNewRestaurantOrder = async (orderNumber, orderType, tableNumber) => {
+    const location = orderType === 'dine_in' && tableNumber ? ` for Table ${tableNumber}` : '';
+    await (0, exports.createNotificationForRoles)(['admin', 'manager', 'restaurant_manager', 'restaurant_chef'], {
+        type: 'system',
+        title: 'Nouvelle Commande Restaurant',
+        message: `Nouvelle commande ${orderNumber}${location} - Type: ${orderType}`,
+        priority: 'high',
+    });
+};
+exports.notifyNewRestaurantOrder = notifyNewRestaurantOrder;
+// Order status change - notify relevant staff
+const notifyOrderStatusChange = async (orderNumber, oldStatus, newStatus) => {
+    let roles = [];
+    let priority = 'medium';
+    // Notify different roles based on status
+    if (newStatus === 'ready') {
+        // Kitchen finished, notify servers
+        roles = ['admin', 'manager', 'restaurant_manager', 'restaurant_server'];
+        priority = 'high';
+    }
+    else if (newStatus === 'completed') {
+        // Order completed, notify cashier for payment
+        roles = ['admin', 'manager', 'restaurant_manager', 'restaurant_cashier'];
+        priority = 'medium';
+    }
+    else {
+        // Other status changes, notify managers only
+        roles = ['admin', 'manager', 'restaurant_manager'];
+        priority = 'low';
+    }
+    await (0, exports.createNotificationForRoles)(roles, {
+        type: 'system',
+        title: 'Statut Commande Mis à Jour',
+        message: `Commande ${orderNumber}: ${oldStatus} → ${newStatus}`,
+        priority,
+    });
+};
+exports.notifyOrderStatusChange = notifyOrderStatusChange;
+// Table reservation notification
+const notifyNewTableReservation = async (guestName, tableNumber, date, time) => {
+    await (0, exports.createNotificationForRoles)(['admin', 'manager', 'restaurant_manager', 'restaurant_server'], {
+        type: 'system',
+        title: 'Nouvelle Réservation Table',
+        message: `Réservation pour ${guestName} - Table ${tableNumber} le ${new Date(date).toLocaleDateString()} à ${time}`,
+        priority: 'medium',
+    });
+};
+exports.notifyNewTableReservation = notifyNewTableReservation;
+// Reservation cancellation
+const notifyReservationCancelled = async (guestName, tableNumber, date) => {
+    await (0, exports.createNotificationForRoles)(['admin', 'manager', 'restaurant_manager'], {
+        type: 'system',
+        title: 'Réservation Annulée',
+        message: `Réservation de ${guestName} pour la Table ${tableNumber} le ${new Date(date).toLocaleDateString()} a été annulée`,
+        priority: 'low',
+    });
+};
+exports.notifyReservationCancelled = notifyReservationCancelled;
+// Low stock alert (future feature)
+const notifyLowStock = async (itemName, currentStock) => {
+    await (0, exports.createNotificationForRoles)(['admin', 'manager', 'restaurant_manager'], {
+        type: 'system',
+        title: '⚠️ Stock Faible',
+        message: `${itemName} - Stock restant: ${currentStock}`,
+        priority: 'high',
+    });
+};
+exports.notifyLowStock = notifyLowStock;

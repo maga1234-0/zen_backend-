@@ -7,6 +7,7 @@ const express_1 = require("express");
 const userController_1 = require("../controllers/userController");
 const auth_1 = require("../middleware/auth");
 const database_1 = __importDefault(require("../config/database"));
+const bcryptjs_1 = __importDefault(require("bcryptjs"));
 const router = (0, express_1.Router)();
 // All routes require authentication
 router.use(auth_1.authenticate);
@@ -85,22 +86,65 @@ router.put('/change-password', async (req, res) => {
             return res.status(400).json({ message: 'Current password and new password are required' });
         }
         // Get user's current password
-        const userResult = await database_1.default.query('SELECT password FROM users WHERE id = $1', [userId]);
+        const userResult = await database_1.default.query('SELECT password_hash FROM users WHERE id = $1', [userId]);
         if (userResult.rows.length === 0) {
             return res.status(404).json({ message: 'User not found' });
         }
         const user = userResult.rows[0];
-        // Verify current password (plain text comparison for now)
-        if (user.password !== currentPassword) {
+        // Verify current password using bcrypt
+        const isMatch = await bcryptjs_1.default.compare(currentPassword, user.password_hash);
+        if (!isMatch) {
             return res.status(401).json({ message: 'Current password is incorrect' });
         }
-        // Update password
-        await database_1.default.query('UPDATE users SET password = $1, updated_at = NOW() WHERE id = $2', [newPassword, userId]);
+        // Update password with bcrypt hashing
+        const hashedPassword = await bcryptjs_1.default.hash(newPassword, 10);
+        await database_1.default.query('UPDATE users SET password_hash = $1, updated_at = NOW() WHERE id = $2', [hashedPassword, userId]);
         console.log(`✅ Password changed for user ${userId}`);
         res.json({ message: 'Password changed successfully' });
     }
     catch (error) {
         console.error('❌ Change password error:', error);
+        res.status(500).json({ message: 'Server error: ' + error.message });
+    }
+});
+// Admin reset password endpoint
+router.put('/:id/reset-password', async (req, res) => {
+    try {
+        const adminId = req.user.id;
+        const adminRole = req.user.role;
+        const { id: targetUserId } = req.params;
+        const { newPassword } = req.body;
+        // Check if user is admin or manager
+        if (adminRole !== 'admin' && adminRole !== 'manager') {
+            return res.status(403).json({ message: 'Only admins and managers can reset passwords' });
+        }
+        if (!newPassword) {
+            return res.status(400).json({ message: 'New password is required' });
+        }
+        if (newPassword.length < 6) {
+            return res.status(400).json({ message: 'Password must be at least 6 characters' });
+        }
+        // Check if target user exists
+        const userResult = await database_1.default.query('SELECT id, email, first_name, last_name FROM users WHERE id = $1', [targetUserId]);
+        if (userResult.rows.length === 0) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+        const targetUser = userResult.rows[0];
+        // Update password with bcrypt hashing
+        const hashedPassword = await bcryptjs_1.default.hash(newPassword, 10);
+        await database_1.default.query('UPDATE users SET password_hash = $1, updated_at = NOW() WHERE id = $2', [hashedPassword, targetUserId]);
+        console.log(`✅ Password reset by admin ${adminId} for user ${targetUserId} (${targetUser.email})`);
+        res.json({
+            message: 'Password reset successfully',
+            user: {
+                id: targetUser.id,
+                email: targetUser.email,
+                name: `${targetUser.first_name} ${targetUser.last_name}`
+            }
+        });
+    }
+    catch (error) {
+        console.error('❌ Admin reset password error:', error);
         res.status(500).json({ message: 'Server error: ' + error.message });
     }
 });

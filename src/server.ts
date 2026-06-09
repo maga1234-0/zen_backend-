@@ -3,7 +3,17 @@ import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import dotenv from 'dotenv';
+import path from 'path';
 import { startScheduledJobs } from './services/scheduledJobs';
+
+// IMPORTANT: Load environment variables FIRST before any other imports
+// Load from the root of zen_backend folder
+dotenv.config({ path: path.join(__dirname, '../.env') });
+
+console.log('📝 Environment loaded:');
+console.log('- DATABASE_URL:', process.env.DATABASE_URL ? '✅ Set' : '❌ Not set');
+console.log('- SMTP_USER:', process.env.SMTP_USER ? '✅ Set' : '❌ Not set');
+console.log('- PORT:', process.env.PORT || '5000');
 
 // Try to import routes with error handling
 let routes;
@@ -20,8 +30,6 @@ try {
     res.json({ error: 'Routes failed to load', message: error.message });
   });
 }
-
-dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 5000;

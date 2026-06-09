@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import pool from '../config/database';
 import { AuthRequest } from '../middleware/auth';
+import { generateResetCode, sendPasswordResetCode } from '../services/emailService';
 
 export const login = async (req: Request, res: Response) => {
   try {
@@ -140,7 +141,6 @@ export const forgotPassword = async (req: Request, res: Response) => {
     const user = userResult.rows[0];
 
     // Générer un code à 6 chiffres
-    const { generateResetCode, sendPasswordResetCode } = require('../services/emailService');
     const code = generateResetCode();
 
     // Calculer l'expiration (15 minutes)

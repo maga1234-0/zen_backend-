@@ -6,7 +6,11 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.pool = void 0;
 const pg_1 = require("pg");
 const dotenv_1 = __importDefault(require("dotenv"));
-dotenv_1.default.config();
+const path_1 = __importDefault(require("path"));
+// Load .env from zen_backend root
+dotenv_1.default.config({ path: path_1.default.join(__dirname, '../../.env') });
+console.log('🔌 Database config loading...');
+console.log('DATABASE_URL present:', !!process.env.DATABASE_URL);
 exports.pool = new pg_1.Pool({
     connectionString: process.env.DATABASE_URL,
     ssl: {

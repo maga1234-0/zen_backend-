@@ -7,7 +7,15 @@ exports.getRecentActivities = exports.getRevenueAnalytics = exports.getBookingTr
 const database_1 = __importDefault(require("../config/database"));
 const getDashboardStats = async (req, res) => {
     try {
-        const hotelId = '550e8400-e29b-41d4-a716-446655440000'; // Default hotel
+        // Get the first available hotel dynamically
+        const hotelResult = await database_1.default.query('SELECT id FROM hotels LIMIT 1');
+        if (hotelResult.rows.length === 0) {
+            return res.status(404).json({
+                message: 'No hotel found. Please create a hotel first.',
+                error: 'NO_HOTEL_FOUND'
+            });
+        }
+        const hotelId = hotelResult.rows[0].id;
         // Total bookings
         const bookingsResult = await database_1.default.query('SELECT COUNT(*) as total FROM bookings WHERE hotel_id = $1', [hotelId]);
         // Revenue (last 30 days) - Only count checked-in or checked-out bookings
@@ -41,7 +49,12 @@ const getDashboardStats = async (req, res) => {
 exports.getDashboardStats = getDashboardStats;
 const getBookingTrends = async (req, res) => {
     try {
-        const hotelId = '550e8400-e29b-41d4-a716-446655440000';
+        // Get the first available hotel dynamically
+        const hotelResult = await database_1.default.query('SELECT id FROM hotels LIMIT 1');
+        if (hotelResult.rows.length === 0) {
+            return res.json([]); // Return empty array if no hotel
+        }
+        const hotelId = hotelResult.rows[0].id;
         const result = await database_1.default.query(`SELECT 
         DATE(created_at) as date,
         COUNT(*) as bookings
@@ -59,7 +72,12 @@ const getBookingTrends = async (req, res) => {
 exports.getBookingTrends = getBookingTrends;
 const getRevenueAnalytics = async (req, res) => {
     try {
-        const hotelId = '550e8400-e29b-41d4-a716-446655440000';
+        // Get the first available hotel dynamically
+        const hotelResult = await database_1.default.query('SELECT id FROM hotels LIMIT 1');
+        if (hotelResult.rows.length === 0) {
+            return res.json([]); // Return empty array if no hotel
+        }
+        const hotelId = hotelResult.rows[0].id;
         const result = await database_1.default.query(`SELECT 
         TO_CHAR(created_at, 'Mon') as month,
         COALESCE(SUM(total_amount), 0) as revenue
@@ -79,7 +97,12 @@ const getRevenueAnalytics = async (req, res) => {
 exports.getRevenueAnalytics = getRevenueAnalytics;
 const getRecentActivities = async (req, res) => {
     try {
-        const hotelId = '550e8400-e29b-41d4-a716-446655440000';
+        // Get the first available hotel dynamically
+        const hotelResult = await database_1.default.query('SELECT id FROM hotels LIMIT 1');
+        if (hotelResult.rows.length === 0) {
+            return res.json([]); // Return empty array if no hotel
+        }
+        const hotelId = hotelResult.rows[0].id;
         const result = await database_1.default.query(`SELECT 
         b.id,
         b.status,

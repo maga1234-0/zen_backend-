@@ -1,7 +1,12 @@
 import { Pool } from 'pg';
 import dotenv from 'dotenv';
+import path from 'path';
 
-dotenv.config();
+// Load .env from zen_backend root
+dotenv.config({ path: path.join(__dirname, '../../.env') });
+
+console.log('🔌 Database config loading...');
+console.log('DATABASE_URL present:', !!process.env.DATABASE_URL);
 
 export const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
