@@ -106,4 +106,7 @@ router.get('/packages', getSpaPackages);
 // Get statistics
 router.get('/statistics', getSpaStatistics);
 
+// Alias pour cohérence avec restaurant
+router.get('/stats', getSpaStatistics);
+
 export default router;
