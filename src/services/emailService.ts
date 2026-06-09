@@ -63,14 +63,24 @@ export async function sendEmail(options: SendEmailOptions): Promise<boolean> {
       });
     }
 
+    // Log configuration SMTP (sans le password)
+    console.log('📧 SMTP Config:', {
+      host: process.env.SMTP_HOST,
+      port: process.env.SMTP_PORT,
+      secure: process.env.SMTP_SECURE,
+      user: process.env.SMTP_USER,
+      from: process.env.EMAIL_FROM,
+      fromName: process.env.EMAIL_FROM_NAME,
+    });
+
     // Envoyer l'email via SMTP
     const info = await transporter.sendMail({
-      from: `"${process.env.EMAIL_FROM_NAME}" <${process.env.SMTP_USER}>`,
+      from: `"${process.env.EMAIL_FROM_NAME || 'ZENITHpms'}" <${process.env.EMAIL_FROM || process.env.SMTP_USER}>`,
       to,
       subject,
       html,
       text: text || '', // Fallback texte brut
-      replyTo: process.env.EMAIL_REPLY_TO,
+      replyTo: process.env.EMAIL_REPLY_TO || process.env.EMAIL_FROM || process.env.SMTP_USER,
     });
 
     // Log succès
@@ -90,19 +100,29 @@ export async function sendEmail(options: SendEmailOptions): Promise<boolean> {
 
     return true;
   } catch (error: any) {
-    console.error('❌ Email sending failed:', error);
+    console.error('❌ Email sending failed - Full error:', {
+      message: error.message,
+      code: error.code,
+      command: error.command,
+      response: error.response,
+      responseCode: error.responseCode,
+    });
 
     // Enregistrer l'erreur dans la base de données
-    await logEmail({
-      userId,
-      bookingId,
-      guestId,
-      type,
-      recipientEmail: to,
-      subject,
-      status: 'failed',
-      errorMessage: error.message,
-    });
+    try {
+      await logEmail({
+        userId,
+        bookingId,
+        guestId,
+        type,
+        recipientEmail: to,
+        subject,
+        status: 'failed',
+        errorMessage: error.message,
+      });
+    } catch (dbError) {
+      console.error('Failed to log email error to database:', dbError);
+    }
 
     return false;
   }
