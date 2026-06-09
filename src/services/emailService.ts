@@ -1,30 +1,15 @@
-import nodemailer from 'nodemailer';
+import { Resend } from 'resend';
 import { pool } from '../config/database';
 
-// Configuration SMTP depuis .env
-const smtpConfig = {
-  host: process.env.SMTP_HOST || 'smtp.gmail.com',
-  port: parseInt(process.env.SMTP_PORT || '587'),
-  secure: process.env.SMTP_SECURE === 'true', // true pour port 465, false pour autres
-  auth: {
-    user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASS,
-  },
-  // Force IPv4 pour éviter les problèmes de connectivité IPv6
-  family: 4,
-};
+// Initialize Resend with API key
+const resend = new Resend(process.env.RESEND_API_KEY);
 
-// Créer le transporteur nodemailer
-const transporter = nodemailer.createTransport(smtpConfig);
-
-// Vérifier la connexion SMTP au démarrage
-transporter.verify((error, success) => {
-  if (error) {
-    console.error('❌ SMTP Connection Error:', error);
-  } else {
-    console.log('✅ SMTP Server ready to send emails');
-  }
-});
+// Verify configuration at startup
+if (!process.env.RESEND_API_KEY) {
+  console.error('❌ RESEND_API_KEY is missing!');
+} else {
+  console.log('✅ Resend Email Service initialized');
+}
 
 /**
  * Interface pour l'envoi d'email
@@ -41,7 +26,7 @@ interface SendEmailOptions {
 }
 
 /**
- * Fonction principale d'envoi d'email
+ * Fonction principale d'envoi d'email avec Resend
  */
 export async function sendEmail(options: SendEmailOptions): Promise<boolean> {
   const {
@@ -56,37 +41,45 @@ export async function sendEmail(options: SendEmailOptions): Promise<boolean> {
   } = options;
 
   try {
-    // Log dans la console en mode debug
-    if (process.env.EMAIL_DEBUG === 'true') {
-      console.log('📧 Sending email:', {
-        to,
-        subject,
-        type,
-      });
-    }
+    const from = process.env.EMAIL_FROM || 'onboarding@resend.dev';
+    const fromName = process.env.EMAIL_FROM_NAME || 'ZENITHpms';
 
-    // Log configuration SMTP (sans le password)
-    console.log('📧 SMTP Config:', {
-      host: process.env.SMTP_HOST,
-      port: process.env.SMTP_PORT,
-      secure: process.env.SMTP_SECURE,
-      user: process.env.SMTP_USER,
-      from: process.env.EMAIL_FROM,
-      fromName: process.env.EMAIL_FROM_NAME,
-    });
-
-    // Envoyer l'email via SMTP
-    const info = await transporter.sendMail({
-      from: `"${process.env.EMAIL_FROM_NAME || 'ZENITHpms'}" <${process.env.EMAIL_FROM || process.env.SMTP_USER}>`,
+    console.log('📧 Sending email via Resend:', {
       to,
       subject,
-      html,
-      text: text || '', // Fallback texte brut
-      replyTo: process.env.EMAIL_REPLY_TO || process.env.EMAIL_FROM || process.env.SMTP_USER,
+      from: `${fromName} <${from}>`,
+      type,
     });
 
+    // Envoyer l'email via Resend API
+    const { data, error } = await resend.emails.send({
+      from: `${fromName} <${from}>`,
+      to: [to],
+      subject,
+      html,
+      text: text || '',
+    });
+
+    if (error) {
+      console.error('❌ Resend API Error:', error);
+      
+      // Enregistrer l'erreur dans la base de données
+      await logEmail({
+        userId,
+        bookingId,
+        guestId,
+        type,
+        recipientEmail: to,
+        subject,
+        status: 'failed',
+        errorMessage: error.message || JSON.stringify(error),
+      });
+
+      return false;
+    }
+
     // Log succès
-    console.log('✅ Email sent:', info.messageId);
+    console.log('✅ Email sent successfully via Resend:', data?.id);
 
     // Enregistrer dans la base de données
     await logEmail({
@@ -102,13 +95,7 @@ export async function sendEmail(options: SendEmailOptions): Promise<boolean> {
 
     return true;
   } catch (error: any) {
-    console.error('❌ Email sending failed - Full error:', {
-      message: error.message,
-      code: error.code,
-      command: error.command,
-      response: error.response,
-      responseCode: error.responseCode,
-    });
+    console.error('❌ Email sending failed:', error);
 
     // Enregistrer l'erreur dans la base de données
     try {
@@ -288,7 +275,7 @@ export async function sendPasswordResetCode(
       <p class="greeting">Bonjour <strong>${userName}</strong>,</p>
       
       <p class="message">
-        Vous avez demandé à réinitialiser votre mot de passe pour votre compte ZENIT PMS.
+        Vous avez demandé à réinitialiser votre mot de passe pour votre compte ZENITH PMS.
       </p>
       
       <p class="message">
@@ -314,7 +301,7 @@ export async function sendPasswordResetCode(
     </div>
     
     <div class="footer">
-      <div class="branding">ZENIT PMS</div>
+      <div class="branding">ZENITH PMS</div>
       <p class="footer-text">Property Management System</p>
       <p class="footer-text">
         Cet email a été envoyé automatiquement, merci de ne pas y répondre.
@@ -337,7 +324,7 @@ Ce code expire dans 15 minutes.
 Si vous n'avez pas fait cette demande, ignorez cet email.
 
 Cordialement,
-L'équipe ZENIT PMS
+L'équipe ZENITH PMS
   `;
 
   return await sendEmail({
