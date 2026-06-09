@@ -10,6 +10,9 @@ import { startScheduledJobs } from './services/scheduledJobs';
 // Load from the root of zen_backend folder
 dotenv.config({ path: path.join(__dirname, '../.env') });
 
+// Import emailService to initialize SMTP connection at startup
+import './services/emailService';
+
 console.log('📝 Environment loaded:');
 console.log('- DATABASE_URL:', process.env.DATABASE_URL ? '✅ Set' : '❌ Not set');
 console.log('- SMTP_USER:', process.env.SMTP_USER ? '✅ Set' : '❌ Not set');
