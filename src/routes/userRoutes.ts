@@ -34,6 +34,9 @@ router.get('/settings', async (req, res) => {
         theme: 'Dark',
         language: 'English',
         signature: '',
+        currency: 'USD',
+        currency_symbol: '$',
+        currency_position: 'before',
       });
     }
 
@@ -60,6 +63,9 @@ router.put('/settings', async (req, res) => {
       theme,
       language,
       signature,
+      currency,
+      currency_symbol,
+      currency_position,
     } = req.body;
 
     console.log('💾 Saving settings for user:', userId);
@@ -76,11 +82,13 @@ router.put('/settings', async (req, res) => {
       const result = await pool.query(
         `INSERT INTO user_settings 
          (user_id, hotel_name, hotel_address, hotel_city, hotel_phone, hotel_email, 
-          time_zone, email_notifications, booking_alerts, payment_notifications, theme, language, signature)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+          time_zone, email_notifications, booking_alerts, payment_notifications, theme, language, signature,
+          currency, currency_symbol, currency_position)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
          RETURNING *`,
         [userId, hotel_name, hotel_address, hotel_city, hotel_phone, hotel_email,
-         time_zone, email_notifications, booking_alerts, payment_notifications, theme, language, signature || '']
+         time_zone, email_notifications, booking_alerts, payment_notifications, theme, language, signature || '',
+         currency || 'USD', currency_symbol || '$', currency_position || 'before']
       );
       console.log('✅ Settings created');
       return res.json(result.rows[0]);
@@ -92,11 +100,13 @@ router.put('/settings', async (req, res) => {
        SET hotel_name = $1, hotel_address = $2, hotel_city = $3, hotel_phone = $4, hotel_email = $5,
            time_zone = $6, email_notifications = $7, booking_alerts = $8, 
            payment_notifications = $9, theme = $10, language = $11, signature = $12,
+           currency = $13, currency_symbol = $14, currency_position = $15,
            updated_at = CURRENT_TIMESTAMP
-       WHERE user_id = $13
+       WHERE user_id = $16
        RETURNING *`,
       [hotel_name, hotel_address, hotel_city, hotel_phone, hotel_email,
-       time_zone, email_notifications, booking_alerts, payment_notifications, theme, language, signature || '', userId]
+       time_zone, email_notifications, booking_alerts, payment_notifications, theme, language, signature || '',
+       currency || 'USD', currency_symbol || '$', currency_position || 'before', userId]
     );
 
     console.log('✅ Settings updated');
@@ -105,6 +115,19 @@ router.put('/settings', async (req, res) => {
     console.error('❌ Update settings error:', error);
     console.error('Error details:', error.message);
     res.status(500).json({ message: 'Server error: ' + error.message });
+  }
+});
+
+// Get available currencies
+router.get('/currencies', async (req, res) => {
+  try {
+    const result = await pool.query(
+      'SELECT code, name, symbol, decimal_places FROM currencies WHERE is_active = true ORDER BY code'
+    );
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Get currencies error:', error);
+    res.status(500).json({ message: 'Server error' });
   }
 });
 
