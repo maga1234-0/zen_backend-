@@ -474,8 +474,8 @@ export const updateOrderStatus = async (req: AuthRequest, res: Response) => {
 
     const result = await pool.query(
       `UPDATE restaurant_orders 
-       SET status = $1, 
-           completed_at = CASE WHEN $1 = 'completed' THEN CURRENT_TIMESTAMP ELSE completed_at END,
+       SET status = $1::varchar, 
+           completed_at = CASE WHEN $1::varchar = 'completed' THEN CURRENT_TIMESTAMP ELSE completed_at END,
            updated_at = CURRENT_TIMESTAMP
        WHERE id = $2
        RETURNING *`,
