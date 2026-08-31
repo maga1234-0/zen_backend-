@@ -29,7 +29,7 @@ export const getDashboardStats = async (req: AuthRequest, res: Response) => {
        JOIN bookings b ON p.booking_id = b.id
        WHERE b.hotel_id = $1 
        AND p.payment_date >= NOW() - INTERVAL '30 days'
-       AND p.status = 'completed'`,
+       AND p.payment_status = 'completed'`,
       [hotelId]
     );
 
@@ -113,7 +113,7 @@ export const getRevenueAnalytics = async (req: AuthRequest, res: Response) => {
        JOIN bookings b ON p.booking_id = b.id
        WHERE b.hotel_id = $1 
        AND p.payment_date >= NOW() - INTERVAL '6 months'
-       AND p.status = 'completed'
+       AND p.payment_status = 'completed'
        GROUP BY TO_CHAR(p.payment_date, 'Mon'), EXTRACT(MONTH FROM p.payment_date)
        ORDER BY EXTRACT(MONTH FROM p.payment_date)`,
       [hotelId]
