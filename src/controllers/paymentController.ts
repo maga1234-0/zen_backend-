@@ -212,7 +212,12 @@ export const getPaymentStats = async (req: AuthRequest, res: Response) => {
       GROUP BY payment_type
     `);
 
-    const stats = {
+    const stats: {
+      room: { count: number; total: number };
+      restaurant: { count: number; total: number };
+      spa: { count: number; total: number };
+      total: number;
+    } = {
       room: { count: 0, total: 0 },
       restaurant: { count: 0, total: 0 },
       spa: { count: 0, total: 0 },
@@ -220,11 +225,14 @@ export const getPaymentStats = async (req: AuthRequest, res: Response) => {
     };
 
     statsResult.rows.forEach(row => {
-      stats[row.payment_type as keyof typeof stats] = {
-        count: parseInt(row.count),
-        total: parseFloat(row.total_amount)
-      };
-      stats.total += parseFloat(row.total_amount);
+      const paymentType = row.payment_type as 'room' | 'restaurant' | 'spa';
+      if (paymentType === 'room' || paymentType === 'restaurant' || paymentType === 'spa') {
+        stats[paymentType] = {
+          count: parseInt(row.count),
+          total: parseFloat(row.total_amount)
+        };
+        stats.total += parseFloat(row.total_amount);
+      }
     });
 
     res.json(stats);

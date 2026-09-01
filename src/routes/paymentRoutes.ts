@@ -1,5 +1,5 @@
 import express from 'express';
-import { auth } from '../middleware/auth';
+import { authenticate } from '../middleware/auth';
 import {
   recordRestaurantPayment,
   recordSpaPayment,
@@ -10,13 +10,13 @@ import {
 const router = express.Router();
 
 // Routes pour paiements restaurant
-router.post('/restaurant/:orderId', auth, recordRestaurantPayment);
+router.post('/restaurant/:orderId', authenticate, recordRestaurantPayment);
 
 // Routes pour paiements spa
-router.post('/spa/:bookingId', auth, recordSpaPayment);
+router.post('/spa/:bookingId', authenticate, recordSpaPayment);
 
 // Routes générales
-router.get('/', auth, getAllPayments);
-router.get('/stats', auth, getPaymentStats);
+router.get('/', authenticate, getAllPayments);
+router.get('/stats', authenticate, getPaymentStats);
 
 export default router;
