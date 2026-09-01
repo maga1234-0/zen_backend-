@@ -1,12 +1,22 @@
-import { Router } from 'express';
-import { getAllPayments, createPayment } from '../controllers/paymentController';
-import { authenticate } from '../middleware/auth';
+import express from 'express';
+import { auth } from '../middleware/auth';
+import {
+  recordRestaurantPayment,
+  recordSpaPayment,
+  getAllPayments,
+  getPaymentStats
+} from '../controllers/paymentController';
 
-const router = Router();
+const router = express.Router();
 
-router.use(authenticate);
+// Routes pour paiements restaurant
+router.post('/restaurant/:orderId', auth, recordRestaurantPayment);
 
-router.get('/', getAllPayments);
-router.post('/', createPayment);
+// Routes pour paiements spa
+router.post('/spa/:bookingId', auth, recordSpaPayment);
+
+// Routes générales
+router.get('/', auth, getAllPayments);
+router.get('/stats', auth, getPaymentStats);
 
 export default router;

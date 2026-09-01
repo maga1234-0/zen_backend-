@@ -1,83 +1,235 @@
 import { Response } from 'express';
 import pool from '../config/database';
 import { AuthRequest } from '../middleware/auth';
-import * as notificationService from '../services/notificationService';
 
-export const getAllPayments = async (req: AuthRequest, res: Response) => {
+/**
+ * Enregistrer un paiement pour une commande restaurant
+ */
+export const recordRestaurantPayment = async (req: AuthRequest, res: Response) => {
+  const { orderId } = req.params;
+  const { amount, payment_method, notes } = req.body;
+
   try {
-    const result = await pool.query(`
-      SELECT 
-        p.id,
-        p.booking_id,
-        p.amount,
-        p.payment_method,
-        p.payment_status,
-        p.transaction_id,
-        p.payment_date,
-        COALESCE(g.first_name || ' ' || g.last_name, 'Unknown Guest') as guest_name,
-        COALESCE(r.room_number, 'N/A') as room_number
-      FROM payments p
-      LEFT JOIN bookings b ON p.booking_id = b.id
-      LEFT JOIN guests g ON b.guest_id = g.id
-      LEFT JOIN rooms r ON b.room_id = r.id
-      ORDER BY p.payment_date DESC
-    `);
+    // Vérifier que la commande existe
+    const orderResult = await pool.query(
+      'SELECT id, total_amount, payment_status FROM restaurant_orders WHERE id = $1',
+      [orderId]
+    );
 
-    console.log(`📊 Retrieved ${result.rows.length} payments`);
-    res.json(result.rows);
+    if (orderResult.rows.length === 0) {
+      return res.status(404).json({ message: 'Commande restaurant non trouvée' });
+    }
+
+    const order = orderResult.rows[0];
+
+    // Créer le paiement
+    const paymentResult = await pool.query(
+      `INSERT INTO payments (
+        payment_type,
+        restaurant_order_id,
+        amount,
+        payment_method,
+        payment_status,
+        payment_date,
+        transaction_id,
+        notes
+      ) VALUES ($1, $2, $3, $4, $5, NOW(), $6, $7)
+      RETURNING *`,
+      [
+        'restaurant',
+        orderId,
+        amount || order.total_amount,
+        payment_method || 'cash',
+        'completed',
+        `REST-${Date.now()}`,
+        notes || null
+      ]
+    );
+
+    // Mettre à jour le statut de paiement de la commande
+    await pool.query(
+      `UPDATE restaurant_orders 
+       SET payment_status = 'paid', 
+           updated_at = NOW()
+       WHERE id = $1`,
+      [orderId]
+    );
+
+    res.status(201).json({
+      message: 'Paiement enregistré avec succès',
+      payment: paymentResult.rows[0]
+    });
   } catch (error) {
-    console.error('Get payments error:', error);
-    res.status(500).json({ message: 'Server error' });
+    console.error('Error recording restaurant payment:', error);
+    res.status(500).json({ message: 'Erreur serveur lors de l\'enregistrement du paiement' });
   }
 };
 
-export const createPayment = async (req: AuthRequest, res: Response) => {
+/**
+ * Enregistrer un paiement pour une réservation spa
+ */
+export const recordSpaPayment = async (req: AuthRequest, res: Response) => {
+  const { bookingId } = req.params;
+  const { amount, payment_method, notes } = req.body;
+
   try {
-    const { bookingId, amount, paymentMethod, transactionId } = req.body;
-
-    // Check if payment already exists for this booking
-    const existingPayment = await pool.query(
-      `SELECT id, payment_status FROM payments WHERE booking_id = $1 AND payment_status = 'completed'`,
+    // Vérifier que la réservation spa existe
+    const bookingResult = await pool.query(
+      'SELECT id, total_price, payment_status FROM spa_bookings WHERE id = $1',
       [bookingId]
     );
 
-    if (existingPayment.rows.length > 0) {
-      return res.status(400).json({ 
-        message: 'Payment already exists for this booking',
-        error: 'This booking has already been paid'
-      });
+    if (bookingResult.rows.length === 0) {
+      return res.status(404).json({ message: 'Réservation spa non trouvée' });
     }
 
-    const result = await pool.query(
-      `INSERT INTO payments (booking_id, amount, payment_method, payment_status, transaction_id) 
-       VALUES ($1, $2, $3, $4, $5) 
-       RETURNING *`,
-      [bookingId, amount, paymentMethod, 'completed', transactionId || `TXN${Date.now()}`]
+    const booking = bookingResult.rows[0];
+
+    // Créer le paiement
+    const paymentResult = await pool.query(
+      `INSERT INTO payments (
+        payment_type,
+        spa_booking_id,
+        amount,
+        payment_method,
+        payment_status,
+        payment_date,
+        transaction_id,
+        notes
+      ) VALUES ($1, $2, $3, $4, $5, NOW(), $6, $7)
+      RETURNING *`,
+      [
+        'spa',
+        bookingId,
+        amount || booking.total_price,
+        payment_method || 'cash',
+        'completed',
+        `SPA-${Date.now()}`,
+        notes || null
+      ]
     );
 
-    console.log('✅ Payment created:', result.rows[0].id);
-
-    // Get booking and guest info for notification
-    const bookingInfo = await pool.query(
-      `SELECT 
-        g.first_name || ' ' || g.last_name as guest_name,
-        r.room_number
-       FROM bookings b
-       JOIN guests g ON b.guest_id = g.id
-       JOIN rooms r ON b.room_id = r.id
-       WHERE b.id = $1`,
+    // Mettre à jour le statut de paiement de la réservation spa
+    await pool.query(
+      `UPDATE spa_bookings 
+       SET payment_status = 'paid', 
+           updated_at = NOW()
+       WHERE id = $1`,
       [bookingId]
     );
 
-    if (bookingInfo.rows.length > 0) {
-      const { guest_name, room_number } = bookingInfo.rows[0];
-      await notificationService.notifyPaymentReceived(guest_name, amount, room_number);
-      console.log(`📧 Payment notification sent for ${guest_name} - Room ${room_number}`);
-    }
-
-    res.status(201).json(result.rows[0]);
+    res.status(201).json({
+      message: 'Paiement enregistré avec succès',
+      payment: paymentResult.rows[0]
+    });
   } catch (error) {
-    console.error('Create payment error:', error);
-    res.status(500).json({ message: 'Server error' });
+    console.error('Error recording spa payment:', error);
+    res.status(500).json({ message: 'Erreur serveur lors de l\'enregistrement du paiement' });
+  }
+};
+
+/**
+ * Obtenir tous les paiements (room, restaurant, spa)
+ */
+export const getAllPayments = async (req: AuthRequest, res: Response) => {
+  const { type } = req.query; // type: 'all', 'room', 'restaurant', 'spa'
+
+  try {
+    let query = `
+      SELECT 
+        p.*,
+        CASE 
+          WHEN p.payment_type = 'room' THEN 
+            (SELECT g.first_name || ' ' || g.last_name 
+             FROM bookings b 
+             JOIN guests g ON b.guest_id = g.id 
+             WHERE b.id = p.booking_id)
+          WHEN p.payment_type = 'restaurant' THEN 
+            (SELECT ro.order_number 
+             FROM restaurant_orders ro 
+             WHERE ro.id = p.restaurant_order_id)
+          WHEN p.payment_type = 'spa' THEN 
+            (SELECT sb.guest_name 
+             FROM spa_bookings sb 
+             WHERE sb.id = p.spa_booking_id)
+        END as reference_name,
+        CASE 
+          WHEN p.payment_type = 'room' THEN 
+            (SELECT r.room_number 
+             FROM bookings b 
+             JOIN rooms r ON b.room_id = r.id 
+             WHERE b.id = p.booking_id)
+          WHEN p.payment_type = 'restaurant' THEN 
+            (SELECT 
+              CASE ro.order_type
+                WHEN 'room_service' THEN 'Room Service'
+                WHEN 'dine_in' THEN 'Dine In'
+                WHEN 'takeaway' THEN 'Take Away'
+                ELSE 'Restaurant'
+              END
+             FROM restaurant_orders ro 
+             WHERE ro.id = p.restaurant_order_id)
+          WHEN p.payment_type = 'spa' THEN 
+            (SELECT s.name 
+             FROM spa_bookings sb
+             JOIN spa_services s ON sb.service_id = s.id 
+             WHERE sb.id = p.spa_booking_id)
+        END as reference_detail
+      FROM payments p
+    `;
+
+    const params: any[] = [];
+
+    if (type && type !== 'all') {
+      query += ' WHERE p.payment_type = $1';
+      params.push(type);
+    }
+
+    query += ' ORDER BY p.payment_date DESC';
+
+    const result = await pool.query(query, params);
+
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Error fetching payments:', error);
+    res.status(500).json({ message: 'Erreur serveur' });
+  }
+};
+
+/**
+ * Obtenir les statistiques de paiements
+ */
+export const getPaymentStats = async (req: AuthRequest, res: Response) => {
+  try {
+    const statsResult = await pool.query(`
+      SELECT 
+        payment_type,
+        COUNT(*) as count,
+        COALESCE(SUM(amount), 0) as total_amount
+      FROM payments
+      WHERE payment_status = 'completed'
+      AND payment_date >= NOW() - INTERVAL '30 days'
+      GROUP BY payment_type
+    `);
+
+    const stats = {
+      room: { count: 0, total: 0 },
+      restaurant: { count: 0, total: 0 },
+      spa: { count: 0, total: 0 },
+      total: 0
+    };
+
+    statsResult.rows.forEach(row => {
+      stats[row.payment_type as keyof typeof stats] = {
+        count: parseInt(row.count),
+        total: parseFloat(row.total_amount)
+      };
+      stats.total += parseFloat(row.total_amount);
+    });
+
+    res.json(stats);
+  } catch (error) {
+    console.error('Error fetching payment stats:', error);
+    res.status(500).json({ message: 'Erreur serveur' });
   }
 };
