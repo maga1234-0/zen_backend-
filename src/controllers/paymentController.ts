@@ -236,7 +236,7 @@ export const getAllPayments = async (req: AuthRequest, res: Response) => {
             (SELECT sb.guest_name 
              FROM spa_bookings sb 
              WHERE sb.id = p.spa_booking_id)
-        END as reference_name,
+        END as guest_name,
         CASE 
           WHEN p.payment_type = 'room' THEN 
             (SELECT r.room_number 
@@ -246,9 +246,10 @@ export const getAllPayments = async (req: AuthRequest, res: Response) => {
           WHEN p.payment_type = 'restaurant' THEN 
             (SELECT 
               CASE ro.order_type
-                WHEN 'room_service' THEN 'Room Service'
-                WHEN 'dine_in' THEN 'Dine In'
+                WHEN 'room_service' THEN 'Room ' || ro.room_number::text
+                WHEN 'dine_in' THEN 'Table ' || ro.table_number::text
                 WHEN 'takeaway' THEN 'Take Away'
+                WHEN 'bar' THEN 'Bar'
                 ELSE 'Restaurant'
               END
              FROM restaurant_orders ro 
@@ -258,7 +259,7 @@ export const getAllPayments = async (req: AuthRequest, res: Response) => {
              FROM spa_bookings sb
              JOIN spa_services s ON sb.service_id = s.id 
              WHERE sb.id = p.spa_booking_id)
-        END as reference_detail
+        END as room_number
       FROM payments p
     `;
 

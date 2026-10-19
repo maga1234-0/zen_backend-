@@ -79,20 +79,27 @@ router.get('/today/checkouts', async (req: AuthRequest, res) => {
 router.get('/unpaid', async (req: AuthRequest, res) => {
   try {
     const result = await pool.query(
-      `SELECT b.*, 
+      `SELECT DISTINCT b.*, 
         g.first_name || ' ' || g.last_name as guest_name,
         g.phone as guest_phone,
-        r.room_number
+        r.room_number,
+        COALESCE(
+          (SELECT SUM(p.amount) 
+           FROM payments p 
+           WHERE p.booking_id = b.id 
+           AND p.payment_status = 'completed'), 0
+        ) as total_paid
        FROM bookings b
        JOIN guests g ON b.guest_id = g.id
        JOIN rooms r ON b.room_id = r.id
-       LEFT JOIN payments p ON b.id = p.booking_id AND p.payment_status = 'completed'
-       WHERE p.id IS NULL
-       AND b.status NOT IN ('cancelled')
+       WHERE b.status NOT IN ('cancelled', 'checked_out')
+       AND (b.payment_status IS NULL OR b.payment_status IN ('unpaid', 'partial'))
        ORDER BY b.created_at DESC`
     );
+    console.log('📋 Unpaid bookings found:', result.rows.length);
     res.json(result.rows);
   } catch (error) {
+    console.error('❌ Get unpaid bookings error:', error);
     res.status(500).json({ message: 'Server error' });
   }
 });
