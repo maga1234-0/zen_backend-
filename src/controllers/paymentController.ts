@@ -3,6 +3,90 @@ import pool from '../config/database';
 import { AuthRequest } from '../middleware/auth';
 
 /**
+ * Enregistrer un paiement pour une réservation de chambre
+ */
+export const recordBookingPayment = async (req: AuthRequest, res: Response) => {
+  const { bookingId, amount, paymentMethod, transactionId, notes } = req.body;
+
+  try {
+    // Vérifier que la réservation existe
+    const bookingResult = await pool.query(
+      'SELECT id, total_amount, payment_status FROM bookings WHERE id = $1',
+      [bookingId]
+    );
+
+    if (bookingResult.rows.length === 0) {
+      return res.status(404).json({ message: 'Réservation non trouvée' });
+    }
+
+    const booking = bookingResult.rows[0];
+
+    // Créer le paiement
+    const paymentResult = await pool.query(
+      `INSERT INTO payments (
+        payment_type,
+        booking_id,
+        amount,
+        payment_method,
+        payment_status,
+        payment_date,
+        transaction_id,
+        notes
+      ) VALUES ($1, $2, $3, $4, $5, NOW(), $6, $7)
+      RETURNING *`,
+      [
+        'room',
+        bookingId,
+        amount || booking.total_amount,
+        paymentMethod || 'cash',
+        'completed',
+        transactionId || `TXN-${Date.now()}`,
+        notes || null
+      ]
+    );
+
+    // Vérifier si la réservation est entièrement payée
+    const totalPaidResult = await pool.query(
+      `SELECT COALESCE(SUM(amount), 0) as total_paid
+       FROM payments
+       WHERE booking_id = $1 AND payment_status = 'completed'`,
+      [bookingId]
+    );
+
+    const totalPaid = parseFloat(totalPaidResult.rows[0].total_paid);
+    const bookingAmount = parseFloat(booking.total_amount);
+
+    // Mettre à jour le statut de paiement de la réservation si entièrement payé
+    if (totalPaid >= bookingAmount) {
+      await pool.query(
+        `UPDATE bookings 
+         SET payment_status = 'paid', 
+             updated_at = NOW()
+         WHERE id = $1`,
+        [bookingId]
+      );
+    } else {
+      await pool.query(
+        `UPDATE bookings 
+         SET payment_status = 'partial', 
+             updated_at = NOW()
+         WHERE id = $1`,
+        [bookingId]
+      );
+    }
+
+    res.status(201).json({
+      message: 'Paiement enregistré avec succès',
+      payment: paymentResult.rows[0],
+      total_paid: totalPaid
+    });
+  } catch (error) {
+    console.error('Error recording booking payment:', error);
+    res.status(500).json({ message: 'Erreur serveur lors de l\'enregistrement du paiement' });
+  }
+};
+
+/**
  * Enregistrer un paiement pour une commande restaurant
  */
 export const recordRestaurantPayment = async (req: AuthRequest, res: Response) => {
