@@ -218,9 +218,6 @@ export const payBookingInvoice = async (req: AuthRequest, res: Response) => {
     `, [bookingId]);
 
     const totalPaid = parseFloat(totalPaidResult.rows[0]?.total_paid || 0);
-
-    // Récupérer la facture pour vérifier si tout est payé
-    const invoiceRes = await getBookingInvoice({ params: { bookingId }, user: req.user } as any, res);
     
     res.status(201).json({
       message: 'Paiement enregistré avec succès',
