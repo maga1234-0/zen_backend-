@@ -10,7 +10,7 @@ export const getOverdueRooms = async (req: Request, res: Response) => {
       SELECT 
         r.id,
         r.room_number,
-        r.room_type,
+        rt.name as room_type,
         r.floor,
         r.status,
         r.status_changed_at,
@@ -21,6 +21,7 @@ export const getOverdueRooms = async (req: Request, res: Response) => {
           ELSE 'NORMAL'
         END AS alert_level
       FROM rooms r
+      LEFT JOIN room_types rt ON r.room_type_id = rt.id
       WHERE r.status IN ('dirty', 'cleaning')
         AND r.status_changed_at IS NOT NULL
         AND EXTRACT(EPOCH FROM (NOW() - r.status_changed_at))/3600 >= ($1 - 0.5)
@@ -47,13 +48,14 @@ export const getRoomStatusDuration = async (req: Request, res: Response) => {
       SELECT 
         r.id,
         r.room_number,
-        r.room_type,
+        rt.name as room_type,
         r.status,
         r.status_changed_at,
         r.updated_at,
         ROUND(CAST(EXTRACT(EPOCH FROM (NOW() - r.status_changed_at))/3600 AS NUMERIC), 2) as hours_in_current_status,
         ROUND(CAST(EXTRACT(EPOCH FROM (NOW() - r.status_changed_at))/60 AS NUMERIC), 0) as minutes_in_current_status
       FROM rooms r
+      LEFT JOIN room_types rt ON r.room_type_id = rt.id
       WHERE r.id = $1
     `, [roomId]);
 

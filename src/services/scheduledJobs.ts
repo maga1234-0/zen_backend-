@@ -137,11 +137,12 @@ export const startOverdueRoomsAlert = () => {
         SELECT 
           r.id,
           r.room_number,
-          r.room_type,
+          rt.name as room_type,
           r.status,
           r.status_changed_at,
           ROUND(CAST(EXTRACT(EPOCH FROM (NOW() - r.status_changed_at))/3600 AS NUMERIC), 2) as hours_overdue
         FROM rooms r
+        LEFT JOIN room_types rt ON r.room_type_id = rt.id
         WHERE r.status IN ('dirty', 'cleaning')
           AND r.status_changed_at IS NOT NULL
           AND EXTRACT(EPOCH FROM (NOW() - r.status_changed_at))/3600 >= 2.0
@@ -166,7 +167,7 @@ export const startOverdueRoomsAlert = () => {
           {
             type: 'room_alert',
             title: `🚨 Chambre ${room.room_number} - Nettoyage en retard`,
-            message: `La chambre ${room.room_number} (${room.room_type}) est ${room.status === 'dirty' ? 'sale' : 'en cours de nettoyage'} depuis ${hoursText}. Veuillez la traiter immédiatement.`,
+            message: `La chambre ${room.room_number} (${room.room_type || 'N/A'}) est ${room.status === 'dirty' ? 'sale' : 'en cours de nettoyage'} depuis ${hoursText}. Veuillez la traiter immédiatement.`,
             priority: room.hours_overdue >= 3 ? 'high' : 'medium',
           }
         );
