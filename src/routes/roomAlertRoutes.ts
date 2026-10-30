@@ -1,17 +1,17 @@
 import express from 'express';
 import * as roomAlertController from '../controllers/roomAlertController';
-import { authenticateToken, requireRole } from '../middleware/auth';
+import { authenticate, authorize } from '../middleware/auth';
 
 const router = express.Router();
 
 // All routes require authentication
-router.use(authenticateToken);
+router.use(authenticate);
 
 // Get overdue dirty rooms (rooms dirty > 2 hours)
 // Accessible by: admin, manager, housekeeping
 router.get(
   '/overdue',
-  requireRole(['admin', 'manager', 'housekeeping']),
+  authorize('admin', 'manager', 'housekeeping'),
   roomAlertController.getOverdueRooms
 );
 
@@ -19,7 +19,7 @@ router.get(
 // Accessible by: admin, manager, housekeeping
 router.get(
   '/:roomId/status-duration',
-  requireRole(['admin', 'manager', 'housekeeping']),
+  authorize('admin', 'manager', 'housekeeping'),
   roomAlertController.getRoomStatusDuration
 );
 
@@ -27,7 +27,7 @@ router.get(
 // Accessible by: admin, manager, housekeeping
 router.get(
   '/stats/cleaning',
-  requireRole(['admin', 'manager', 'housekeeping']),
+  authorize('admin', 'manager', 'housekeeping'),
   roomAlertController.getRoomCleaningStats
 );
 
@@ -35,7 +35,7 @@ router.get(
 // Accessible by: admin, manager only
 router.post(
   '/trigger-alerts',
-  requireRole(['admin', 'manager']),
+  authorize('admin', 'manager'),
   roomAlertController.triggerOverdueRoomAlerts
 );
 

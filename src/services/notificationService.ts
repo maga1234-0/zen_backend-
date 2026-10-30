@@ -1,6 +1,6 @@
 import pool from '../config/database';
 
-export type NotificationType = 'booking' | 'room' | 'housekeeping' | 'payment' | 'maintenance' | 'system';
+export type NotificationType = 'booking' | 'room' | 'housekeeping' | 'payment' | 'maintenance' | 'system' | 'room_alert';
 
 interface CreateNotificationParams {
   userId?: string;
