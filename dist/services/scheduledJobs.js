@@ -36,7 +36,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.startScheduledJobs = exports.startDirtyRoomsMonitor = exports.startAutoCheckin = exports.startAutoCheckout = void 0;
+exports.startScheduledJobs = exports.startOverdueRoomsAlert = exports.startDirtyRoomsMonitor = exports.startAutoCheckin = exports.startAutoCheckout = void 0;
 const node_cron_1 = __importDefault(require("node-cron"));
 const database_1 = __importDefault(require("../config/database"));
 const notificationService = __importStar(require("./notificationService"));
@@ -140,11 +140,61 @@ const startDirtyRoomsMonitor = () => {
     console.log('⏰ Dirty rooms monitor started (runs every 2 hours)');
 };
 exports.startDirtyRoomsMonitor = startDirtyRoomsMonitor;
+// Monitor rooms that have been dirty for more than 2 hours
+const startOverdueRoomsAlert = () => {
+    // Run every 30 minutes
+    node_cron_1.default.schedule('*/30 * * * *', async () => {
+        try {
+            console.log('🔄 Running overdue dirty rooms check...');
+            // Get rooms that have been dirty/cleaning for more than 2 hours
+            const result = await database_1.default.query(`
+        SELECT 
+          r.id,
+          r.room_number,
+          rt.name as room_type,
+          r.status,
+          r.status_changed_at,
+          ROUND(CAST(EXTRACT(EPOCH FROM (NOW() - r.status_changed_at))/3600 AS NUMERIC), 2) as hours_overdue
+        FROM rooms r
+        LEFT JOIN room_types rt ON r.room_type_id = rt.id
+        WHERE r.status IN ('dirty', 'cleaning')
+          AND r.status_changed_at IS NOT NULL
+          AND EXTRACT(EPOCH FROM (NOW() - r.status_changed_at))/3600 >= 2.0
+        ORDER BY hours_overdue DESC
+      `);
+            if (result.rows.length === 0) {
+                console.log('✅ No overdue dirty rooms');
+                return;
+            }
+            console.log(`🚨 Found ${result.rows.length} overdue dirty room(s)`);
+            // Send alert for each overdue room
+            for (const room of result.rows) {
+                const hoursText = room.hours_overdue >= 3
+                    ? `${Math.floor(room.hours_overdue)} heures`
+                    : `${room.hours_overdue} heures`;
+                await notificationService.createNotificationForRoles(['housekeeping', 'manager', 'admin'], {
+                    type: 'room_alert',
+                    title: `🚨 Chambre ${room.room_number} - Nettoyage en retard`,
+                    message: `La chambre ${room.room_number} (${room.room_type || 'N/A'}) est ${room.status === 'dirty' ? 'sale' : 'en cours de nettoyage'} depuis ${hoursText}. Veuillez la traiter immédiatement.`,
+                    priority: room.hours_overdue >= 3 ? 'high' : 'medium',
+                });
+                console.log(`📬 Alert sent for room ${room.room_number} (${hoursText} overdue)`);
+            }
+            console.log('✅ Overdue rooms alert job completed');
+        }
+        catch (error) {
+            console.error('❌ Overdue rooms alert job error:', error);
+        }
+    });
+    console.log('⏰ Overdue dirty rooms alert started (runs every 30 minutes)');
+};
+exports.startOverdueRoomsAlert = startOverdueRoomsAlert;
 // Start all scheduled jobs
 const startScheduledJobs = () => {
     (0, exports.startAutoCheckout)();
     (0, exports.startAutoCheckin)();
     (0, exports.startDirtyRoomsMonitor)();
+    (0, exports.startOverdueRoomsAlert)(); // NEW: Alert for rooms dirty > 2 hours
     console.log('✅ All scheduled jobs initialized');
 };
 exports.startScheduledJobs = startScheduledJobs;

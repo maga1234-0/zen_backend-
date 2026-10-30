@@ -13,6 +13,8 @@ const scheduledJobs_1 = require("./services/scheduledJobs");
 // IMPORTANT: Load environment variables FIRST before any other imports
 // Load from the root of zen_backend folder
 dotenv_1.default.config({ path: path_1.default.join(__dirname, '../.env') });
+// Import emailService to initialize SMTP connection at startup
+require("./services/emailService");
 console.log('📝 Environment loaded:');
 console.log('- DATABASE_URL:', process.env.DATABASE_URL ? '✅ Set' : '❌ Not set');
 console.log('- SMTP_USER:', process.env.SMTP_USER ? '✅ Set' : '❌ Not set');

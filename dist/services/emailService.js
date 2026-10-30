@@ -1,59 +1,58 @@
 "use strict";
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.sendEmail = sendEmail;
 exports.sendPasswordResetCode = sendPasswordResetCode;
 exports.generateResetCode = generateResetCode;
-const nodemailer_1 = __importDefault(require("nodemailer"));
+const resend_1 = require("resend");
 const database_1 = require("../config/database");
-// Configuration SMTP depuis .env
-const smtpConfig = {
-    host: process.env.SMTP_HOST || 'smtp.gmail.com',
-    port: parseInt(process.env.SMTP_PORT || '587'),
-    secure: process.env.SMTP_SECURE === 'true', // true pour port 465, false pour autres
-    auth: {
-        user: process.env.SMTP_USER,
-        pass: process.env.SMTP_PASS,
-    },
-};
-// Créer le transporteur nodemailer
-const transporter = nodemailer_1.default.createTransport(smtpConfig);
-// Vérifier la connexion SMTP au démarrage
-transporter.verify((error, success) => {
-    if (error) {
-        console.error('❌ SMTP Connection Error:', error);
-    }
-    else {
-        console.log('✅ SMTP Server ready to send emails');
-    }
-});
+// Initialize Resend with API key
+const resend = new resend_1.Resend(process.env.RESEND_API_KEY);
+// Verify configuration at startup
+if (!process.env.RESEND_API_KEY) {
+    console.error('❌ RESEND_API_KEY is missing!');
+}
+else {
+    console.log('✅ Resend Email Service initialized');
+}
 /**
- * Fonction principale d'envoi d'email
+ * Fonction principale d'envoi d'email avec Resend
  */
 async function sendEmail(options) {
     const { to, subject, html, text, userId, bookingId, guestId, type = 'general', } = options;
     try {
-        // Log dans la console en mode debug
-        if (process.env.EMAIL_DEBUG === 'true') {
-            console.log('📧 Sending email:', {
-                to,
-                subject,
-                type,
-            });
-        }
-        // Envoyer l'email via SMTP
-        const info = await transporter.sendMail({
-            from: `"${process.env.EMAIL_FROM_NAME}" <${process.env.SMTP_USER}>`,
+        const from = process.env.EMAIL_FROM || 'onboarding@resend.dev';
+        const fromName = process.env.EMAIL_FROM_NAME || 'ZENITHpms';
+        console.log('📧 Sending email via Resend:', {
             to,
             subject,
-            html,
-            text: text || '', // Fallback texte brut
-            replyTo: process.env.EMAIL_REPLY_TO,
+            from: `${fromName} <${from}>`,
+            type,
         });
+        // Envoyer l'email via Resend API
+        const { data, error } = await resend.emails.send({
+            from: `${fromName} <${from}>`,
+            to: [to],
+            subject,
+            html,
+            text: text || '',
+        });
+        if (error) {
+            console.error('❌ Resend API Error:', error);
+            // Enregistrer l'erreur dans la base de données
+            await logEmail({
+                userId,
+                bookingId,
+                guestId,
+                type,
+                recipientEmail: to,
+                subject,
+                status: 'failed',
+                errorMessage: error.message || JSON.stringify(error),
+            });
+            return false;
+        }
         // Log succès
-        console.log('✅ Email sent:', info.messageId);
+        console.log('✅ Email sent successfully via Resend:', data?.id);
         // Enregistrer dans la base de données
         await logEmail({
             userId,
@@ -70,16 +69,21 @@ async function sendEmail(options) {
     catch (error) {
         console.error('❌ Email sending failed:', error);
         // Enregistrer l'erreur dans la base de données
-        await logEmail({
-            userId,
-            bookingId,
-            guestId,
-            type,
-            recipientEmail: to,
-            subject,
-            status: 'failed',
-            errorMessage: error.message,
-        });
+        try {
+            await logEmail({
+                userId,
+                bookingId,
+                guestId,
+                type,
+                recipientEmail: to,
+                subject,
+                status: 'failed',
+                errorMessage: error.message,
+            });
+        }
+        catch (dbError) {
+            console.error('Failed to log email error to database:', dbError);
+        }
         return false;
     }
 }
@@ -224,7 +228,7 @@ async function sendPasswordResetCode(email, code, userName) {
       <p class="greeting">Bonjour <strong>${userName}</strong>,</p>
       
       <p class="message">
-        Vous avez demandé à réinitialiser votre mot de passe pour votre compte ZENIT PMS.
+        Vous avez demandé à réinitialiser votre mot de passe pour votre compte ZENITH PMS.
       </p>
       
       <p class="message">
@@ -250,7 +254,7 @@ async function sendPasswordResetCode(email, code, userName) {
     </div>
     
     <div class="footer">
-      <div class="branding">ZENIT PMS</div>
+      <div class="branding">ZENITH PMS</div>
       <p class="footer-text">Property Management System</p>
       <p class="footer-text">
         Cet email a été envoyé automatiquement, merci de ne pas y répondre.
@@ -272,7 +276,7 @@ Ce code expire dans 15 minutes.
 Si vous n'avez pas fait cette demande, ignorez cet email.
 
 Cordialement,
-L'équipe ZENIT PMS
+L'équipe ZENITH PMS
   `;
     return await sendEmail({
         to: email,

@@ -18,12 +18,13 @@ const getDashboardStats = async (req, res) => {
         const hotelId = hotelResult.rows[0].id;
         // Total bookings
         const bookingsResult = await database_1.default.query('SELECT COUNT(*) as total FROM bookings WHERE hotel_id = $1', [hotelId]);
-        // Revenue (last 30 days) - Only count checked-in or checked-out bookings
-        const revenueResult = await database_1.default.query(`SELECT COALESCE(SUM(total_amount), 0) as revenue 
-       FROM bookings 
-       WHERE hotel_id = $1 
-       AND created_at >= NOW() - INTERVAL '30 days'
-       AND status IN ('checked_in', 'checked_out')`, [hotelId]);
+        // Revenue (last 30 days) - Only count actual recorded payments
+        const revenueResult = await database_1.default.query(`SELECT COALESCE(SUM(p.amount), 0) as revenue 
+       FROM payments p
+       JOIN bookings b ON p.booking_id = b.id
+       WHERE b.hotel_id = $1 
+       AND p.payment_date >= NOW() - INTERVAL '30 days'
+       AND p.payment_status = 'completed'`, [hotelId]);
         // Occupancy rate
         const roomsResult = await database_1.default.query(`SELECT 
         COUNT(*) as total_rooms,
@@ -78,15 +79,17 @@ const getRevenueAnalytics = async (req, res) => {
             return res.json([]); // Return empty array if no hotel
         }
         const hotelId = hotelResult.rows[0].id;
+        // Calculate revenue from actual recorded payments only
         const result = await database_1.default.query(`SELECT 
-        TO_CHAR(created_at, 'Mon') as month,
-        COALESCE(SUM(total_amount), 0) as revenue
-       FROM bookings
-       WHERE hotel_id = $1 
-       AND created_at >= NOW() - INTERVAL '6 months'
-       AND status IN ('checked_in', 'checked_out')
-       GROUP BY TO_CHAR(created_at, 'Mon'), EXTRACT(MONTH FROM created_at)
-       ORDER BY EXTRACT(MONTH FROM created_at)`, [hotelId]);
+        TO_CHAR(p.payment_date, 'Mon') as month,
+        COALESCE(SUM(p.amount), 0) as revenue
+       FROM payments p
+       JOIN bookings b ON p.booking_id = b.id
+       WHERE b.hotel_id = $1 
+       AND p.payment_date >= NOW() - INTERVAL '6 months'
+       AND p.payment_status = 'completed'
+       GROUP BY TO_CHAR(p.payment_date, 'Mon'), EXTRACT(MONTH FROM p.payment_date)
+       ORDER BY EXTRACT(MONTH FROM p.payment_date)`, [hotelId]);
         res.json(result.rows);
     }
     catch (error) {

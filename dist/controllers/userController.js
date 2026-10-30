@@ -3,12 +3,12 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.deleteUser = exports.updateUser = exports.createUser = exports.getAllUsers = void 0;
+exports.changePassword = exports.updateProfilePicture = exports.deleteUser = exports.updateUser = exports.createUser = exports.getAllUsers = void 0;
 const bcryptjs_1 = __importDefault(require("bcryptjs"));
 const database_1 = __importDefault(require("../config/database"));
 const getAllUsers = async (req, res) => {
     try {
-        const result = await database_1.default.query('SELECT id, email, first_name, last_name, phone, role, is_active, created_at FROM users ORDER BY created_at DESC');
+        const result = await database_1.default.query('SELECT id, email, first_name, last_name, phone, role, is_active, profile_picture, created_at FROM users ORDER BY created_at DESC');
         res.json(result.rows);
     }
     catch (error) {
@@ -104,3 +104,70 @@ const deleteUser = async (req, res) => {
     }
 };
 exports.deleteUser = deleteUser;
+const updateProfilePicture = async (req, res) => {
+    try {
+        const userId = req.user?.id;
+        const { profilePicture } = req.body;
+        if (!userId) {
+            return res.status(401).json({ message: 'Unauthorized' });
+        }
+        if (!profilePicture) {
+            return res.status(400).json({ message: 'Profile picture is required' });
+        }
+        // Validate base64 image format
+        if (!profilePicture.startsWith('data:image/')) {
+            return res.status(400).json({ message: 'Invalid image format' });
+        }
+        // Update profile picture
+        const result = await database_1.default.query('UPDATE users SET profile_picture = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 RETURNING id, profile_picture', [profilePicture, userId]);
+        if (result.rows.length === 0) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+        console.log('✅ Profile picture updated for user:', userId);
+        res.json({
+            message: 'Profile picture updated successfully',
+            profile_picture: result.rows[0].profile_picture
+        });
+    }
+    catch (error) {
+        console.error('Update profile picture error:', error);
+        res.status(500).json({ message: 'Server error' });
+    }
+};
+exports.updateProfilePicture = updateProfilePicture;
+const changePassword = async (req, res) => {
+    try {
+        const userId = req.user?.id;
+        const { currentPassword, newPassword } = req.body;
+        if (!userId) {
+            return res.status(401).json({ message: 'Unauthorized' });
+        }
+        if (!currentPassword || !newPassword) {
+            return res.status(400).json({ message: 'Current password and new password are required' });
+        }
+        if (newPassword.length < 6) {
+            return res.status(400).json({ message: 'New password must be at least 6 characters long' });
+        }
+        // Get current password hash
+        const userResult = await database_1.default.query('SELECT password_hash FROM users WHERE id = $1', [userId]);
+        if (userResult.rows.length === 0) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+        // Verify current password
+        const isValidPassword = await bcryptjs_1.default.compare(currentPassword, userResult.rows[0].password_hash);
+        if (!isValidPassword) {
+            return res.status(400).json({ message: 'Current password is incorrect' });
+        }
+        // Hash new password
+        const newPasswordHash = await bcryptjs_1.default.hash(newPassword, 10);
+        // Update password
+        await database_1.default.query('UPDATE users SET password_hash = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2', [newPasswordHash, userId]);
+        console.log('✅ Password changed for user:', userId);
+        res.json({ message: 'Password changed successfully' });
+    }
+    catch (error) {
+        console.error('Change password error:', error);
+        res.status(500).json({ message: 'Server error' });
+    }
+};
+exports.changePassword = changePassword;

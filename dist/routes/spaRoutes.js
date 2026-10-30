@@ -58,4 +58,6 @@ router.get('/packages', spaController_1.getSpaPackages);
 // ============================================
 // Get statistics
 router.get('/statistics', spaController_1.getSpaStatistics);
+// Alias pour cohérence avec restaurant
+router.get('/stats', spaController_1.getSpaStatistics);
 exports.default = router;
