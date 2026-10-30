@@ -13,6 +13,7 @@ import aiRoutes from './aiRoutes';
 import restaurantRoutes from './restaurantRoutes';
 import onlineBookingRoutes from './onlineBookingRoutes';
 import spaRoutes from './spaRoutes';
+import roomAlertRoutes from './roomAlertRoutes';
 
 const router = Router();
 
@@ -30,5 +31,6 @@ router.use('/ai', aiRoutes);
 router.use('/restaurant', restaurantRoutes);
 router.use('/online-booking', onlineBookingRoutes);
 router.use('/spa', spaRoutes);
+router.use('/room-alerts', roomAlertRoutes);
 
 export default router;

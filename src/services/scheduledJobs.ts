@@ -125,10 +125,69 @@ export const startDirtyRoomsMonitor = () => {
   console.log('⏰ Dirty rooms monitor started (runs every 2 hours)');
 };
 
+// Monitor rooms that have been dirty for more than 2 hours
+export const startOverdueRoomsAlert = () => {
+  // Run every 30 minutes
+  cron.schedule('*/30 * * * *', async () => {
+    try {
+      console.log('🔄 Running overdue dirty rooms check...');
+
+      // Get rooms that have been dirty/cleaning for more than 2 hours
+      const result = await pool.query(`
+        SELECT 
+          r.id,
+          r.room_number,
+          r.room_type,
+          r.status,
+          r.status_changed_at,
+          ROUND(CAST(EXTRACT(EPOCH FROM (NOW() - r.status_changed_at))/3600 AS NUMERIC), 2) as hours_overdue
+        FROM rooms r
+        WHERE r.status IN ('dirty', 'cleaning')
+          AND r.status_changed_at IS NOT NULL
+          AND EXTRACT(EPOCH FROM (NOW() - r.status_changed_at))/3600 >= 2.0
+        ORDER BY hours_overdue DESC
+      `);
+
+      if (result.rows.length === 0) {
+        console.log('✅ No overdue dirty rooms');
+        return;
+      }
+
+      console.log(`🚨 Found ${result.rows.length} overdue dirty room(s)`);
+
+      // Send alert for each overdue room
+      for (const room of result.rows) {
+        const hoursText = room.hours_overdue >= 3 
+          ? `${Math.floor(room.hours_overdue)} heures` 
+          : `${room.hours_overdue} heures`;
+        
+        await notificationService.createNotificationForRoles(
+          ['housekeeping', 'manager', 'admin'],
+          {
+            type: 'room_alert',
+            title: `🚨 Chambre ${room.room_number} - Nettoyage en retard`,
+            message: `La chambre ${room.room_number} (${room.room_type}) est ${room.status === 'dirty' ? 'sale' : 'en cours de nettoyage'} depuis ${hoursText}. Veuillez la traiter immédiatement.`,
+            priority: room.hours_overdue >= 3 ? 'high' : 'medium',
+          }
+        );
+
+        console.log(`📬 Alert sent for room ${room.room_number} (${hoursText} overdue)`);
+      }
+
+      console.log('✅ Overdue rooms alert job completed');
+    } catch (error) {
+      console.error('❌ Overdue rooms alert job error:', error);
+    }
+  });
+
+  console.log('⏰ Overdue dirty rooms alert started (runs every 30 minutes)');
+};
+
 // Start all scheduled jobs
 export const startScheduledJobs = () => {
   startAutoCheckout();
   startAutoCheckin();
   startDirtyRoomsMonitor();
+  startOverdueRoomsAlert(); // NEW: Alert for rooms dirty > 2 hours
   console.log('✅ All scheduled jobs initialized');
 };
